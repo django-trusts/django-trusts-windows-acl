@@ -18,7 +18,7 @@ SECRET_KEY = os.environ.get(
 DEBUG = os.environ.get("DEBUG", "1") == "1"
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
     if host.strip()
 ]
 

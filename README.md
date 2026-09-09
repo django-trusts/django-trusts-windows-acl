@@ -32,7 +32,11 @@ python manage.py runserver
 ```
 
 When `DATABASE_URL` is unset, settings default to
-`postgres://winfs:winfs@127.0.0.1:5432/winfs`.
+`postgres://winfs:winfs@127.0.0.1:5432/winfs`. The official PostgreSQL
+image user (and CI) is a superuser. A locally created role needs
+permission to `SET session_replication_role` so V36 / V40 / V43 can
+bypass write triggers and insert OWNER_RIGHTS or cycle rows that
+writers refuse (`ALTER USER winfs WITH SUPERUSER` is enough).
 
 Open http://127.0.0.1:8000/winfs/ and log in. Seeded passwords are `demo`.
 

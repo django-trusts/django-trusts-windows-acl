@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<h1>Log in</h1>
+<p class="muted">After <code>seed_winfs</code>, demo accounts use password <code>demo</code>: alice, bob, carol, admin.</p>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Log in</button>
+</form>
+<h2>What each user can see after seed</h2>
+<ul>
+    <li><strong>alice</strong> — <code>eng</code> member; reads <code>vol/</code> and <code>proj/</code> via group allow</li>
+    <li><strong>bob</strong> — <code>eng</code> member; same group allow as alice</li>
+    <li><strong>carol</strong> — no <code>eng</code> membership; AccessCheck denies the seeded tree</li>
+    <li><strong>admin</strong> — volume-root owner (owner pre-grant is RC|WD, not a full-control shortcut)</li>
+</ul>
+{% endblock %}

@@ -5,7 +5,7 @@ description = "Bounded Windows filesystem DACL evaluator that validates django-t
 requires-python = ">=3.12"
 dependencies = [
     "Django>=6.1,<6.2",
-    "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@a2ab5a13752751ee761990bea778c9f868b2ad6e",
+    "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@bfd55e23a9c7706271e3560c0ee1804023f1e69f",
     "dj-database-url>=2.3.0",
     "psycopg[binary]>=3.2",
 ]

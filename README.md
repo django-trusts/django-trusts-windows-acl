@@ -11,10 +11,11 @@ This is the implementation repository for the Windows ACL validation on
 It depends on
 [django-trusts](https://github.com/django-trusts/django-trusts)
 **1.0.0.dev0** at revision
-[`a2ab5a13752751ee761990bea778c9f868b2ad6e`](https://github.com/django-trusts/django-trusts/commit/a2ab5a13752751ee761990bea778c9f868b2ad6e)
-(`trusts.context` / `trusts.trustee` after PRs
-[#41](https://github.com/django-trusts/django-trusts/pull/41) and
-[#42](https://github.com/django-trusts/django-trusts/pull/42)).
+[`bfd55e23a9c7706271e3560c0ee1804023f1e69f`](https://github.com/django-trusts/django-trusts/commit/bfd55e23a9c7706271e3560c0ee1804023f1e69f)
+(kernel master after
+[#53](https://github.com/django-trusts/django-trusts/pull/53);
+`trusts.apps.KernelConfig`, `trusts.context` / `trusts.trustee`).
+This consumer does not install `django-trusts-zero`.
 
 Requires **Python ≥ 3.12** and **PostgreSQL 14+**.
 
@@ -48,7 +49,10 @@ Open http://127.0.0.1:8000/winfs/ and log in. Seeded passwords are `demo`.
 | `admin` | volume-root owner (owner pre-grant is RC\|WD, not full control) |
 
 The browser uses authorized-object listing, not “LIST on the folder ⇒
-show every child name”. See [docs/WINFS_ACL.md](docs/WINFS_ACL.md).
+show every child name”. `admin` owns `vol/` but cannot LIST it (owner
+pre-grant is RC\|WD). `carol` can see the volume name and is 403 on
+every node. See [docs/WINFS_BROWSER.md](docs/WINFS_BROWSER.md) and
+[docs/WINFS_ACL.md](docs/WINFS_ACL.md).
 
 ## Checks
 
@@ -58,15 +62,20 @@ python manage.py test winfs
 ```
 
 `manage.py check` must stay clean of `trusts.E001` / `trusts.E002`
-(invalid `Expr` registrations or leftover callable conditions). This
-project does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
+and of kernel `trusts.E006` / `E007` / `E008`. Checks register from
+`KernelConfig.ready()`, not from an authentication backend. This
+project does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS` and
+does not install Zero.
 
-The suite covers the V1–V43 matrix, depths 63/64/65, V38′, cycles,
-group ownership, query-count, and inspected plans (shallow, depth-8,
-1,000-sibling / two-group, protected mid-tree). Plans are written under
+The suite covers the V1–V43 matrix, docs-vs-evaluator catalog replay,
+pending host-oracle provenance, depths 63/64/65, V38′, cycles,
+group ownership, query-count, inspected plans, and the `/winfs/`
+browser limitations. Plans are written under
 [docs/winfs-plans/](docs/winfs-plans/).
 
-CI runs that suite against **PostgreSQL 16**.
+CI runs that suite against **PostgreSQL 16** and runs the Windows-host
+oracle on `windows-latest` (artifact only; results are not
+auto-committed).
 
 ## Portability
 
@@ -75,8 +84,11 @@ Schema, matrix, and evaluator semantics are database-neutral. PostgreSQL
 (recursive CTE, deterministic ACE sequencing, integer bit ops,
 fail-closed cycle/depth). This slice does not ship a second SQL dialect.
 
-Vectors remain **documentation-derived** until separately verified
-against a Windows host.
+Catalog vectors remain **`microsoft-docs`** until a native capture is
+promoted into
+[`winfs/oracle/fixtures/windows_host_observed.json`](winfs/oracle/fixtures/windows_host_observed.json)
+tagged **`windows-host-observed`**. Linux CI cannot run AccessCheck.
+See [docs/windows-oracle.md](docs/windows-oracle.md).
 
 ## What Trusts is used for
 
@@ -88,11 +100,13 @@ Context.register_related(WinStream, through="node")
 ```
 
 No `Trust`, Trustee adapter, `Content`, `Junction`, `TrustGroup`,
-`Role`, or Django `Group` is on the evaluator path. See
+`Role`, or Django `Group` is on the evaluator path. Login uses
+`django.contrib.auth.backends.ModelBackend`. See
 [docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md).
 
 ## Trusts dependency
 
 `requirements.txt` / `pyproject.toml` install Trusts from the git SHA
 above, not from a published PyPI 1.0. Package metadata on that revision
-is `1.0.0.dev0`.
+is `1.0.0.dev0`. Install `trusts.apps.KernelConfig`; do not use bare
+`'trusts'`.

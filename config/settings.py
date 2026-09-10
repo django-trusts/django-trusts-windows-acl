@@ -31,6 +31,9 @@ CSRF_TRUSTED_ORIGINS = [
 # Match django-trusts: keep AutoField so models do not switch to BigAutoField.
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
+# Kernel-only install. Bare "trusts" is invalid after the kernel/Zero
+# split (KernelConfig.default = False). Do not add django-trusts-zero:
+# this consumer uses honest Context registration only.
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -38,12 +41,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "trusts",
+    "trusts.apps.KernelConfig",
     "winfs.apps.WinfsConfig",
 ]
 
+# Ordinary username/password auth. Trusts system checks run through
+# KernelConfig.ready(), not through an authentication backend.
 AUTHENTICATION_BACKENDS = [
-    "trusts.backends.TrustModelBackend",
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
 MIDDLEWARE = [

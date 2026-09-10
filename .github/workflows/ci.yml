@@ -33,15 +33,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Django 6.1, Trusts at a2ab5a1, and psycopg
+      - name: Install Django 6.1, Trusts at bfd55e2, and psycopg
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
       - name: Django system checks
         run: python manage.py check
-      - name: winfs matrix, plans, and schema
+      - name: winfs matrix, oracle provenance, plans, and schema
         run: python manage.py test winfs
       - name: Migrate and seed_winfs
         run: |
           python manage.py migrate --noinput
           python manage.py seed_winfs
+
+  windows-host-oracle:
+    name: Windows-host AccessCheck oracle
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run native AccessCheck oracle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          pwsh -File scripts/windows-host-oracle.ps1 `
+            -CatalogPath winfs/oracle/catalog.json `
+            -OutputPath artifacts/windows_host_observed.json
+      - name: Upload host-observed fixture artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-host-observed
+          path: artifacts/windows_host_observed.json
+          if-no-files-found: error

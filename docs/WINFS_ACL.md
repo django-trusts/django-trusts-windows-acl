@@ -3,11 +3,14 @@
 Revision **`bounded-winfs-acl-r3`** plus the approved depth erratum.
 Implementation lives in this repository. django-trusts core is unchanged.
 
-Vectors in `winfs.tests.test_matrix` are **documentation-derived** from
-Microsoft AccessCheck / ACE inheritance / MS-DTYP sources cited on
+Vectors in `winfs.tests.test_matrix` and `winfs/oracle/catalog.json`
+are **`microsoft-docs`** expectations from Microsoft AccessCheck / ACE
+inheritance / MS-DTYP sources cited on
 [issue #17](https://github.com/django-trusts/django-trusts/issues/17).
-They are not bit-identical NTFS dumps and are not verified against a
-Windows host until a later comparison pass.
+They are not bit-identical NTFS dumps. Native captures, when promoted,
+live only in
+`winfs/oracle/fixtures/windows_host_observed.json` tagged
+`windows-host-observed`. See [windows-oracle.md](windows-oracle.md).
 
 ## What this proves
 
@@ -109,7 +112,9 @@ DATABASE_URL=postgres://USER:PASS@127.0.0.1:5432/DB \
 
 Browse `/winfs/` after logging in as a seeded user (password `demo`).
 The browser uses authorized-object listing, not “LIST on the folder ⇒
-show every child name”.
+show every child name”. Concrete limitations (volume-name leak, owner
+≠ LIST, OWNER_RIGHTS 403, depth/cycle 403) are recorded in
+[WINFS_BROWSER.md](WINFS_BROWSER.md).
 
 Inspected plans for shallow, depth-8, 1 000-sibling / two-group, and
 protected-midtree cases are written under

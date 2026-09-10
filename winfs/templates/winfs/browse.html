@@ -20,7 +20,7 @@
   {% endfor %}
 </table>
 {% if node.kind == "folder" %}
-  <h2>Authorized children (FILE_READ_DATA / FILE_LIST_DIRECTORY)</h2>
+  <h2>Authorized children (FILE_READ_DATA as objects — not Windows “LIST ⇒ all names”)</h2>
   <ul>
     {% for child in children %}
       <li><a href="{% url 'winfs-node' child.pk %}">{{ child.name }}</a> ({{ child.kind }})</li>

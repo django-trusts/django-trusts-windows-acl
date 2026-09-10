@@ -18,7 +18,7 @@ Inspected for this revision:
 
 | Tree | Commit | What it is |
 | --- | --- | --- |
-| `django-trusts` master (PR #42 merge) | `a2ab5a13752751ee761990bea778c9f868b2ad6e` | Installable 1.0.0.dev0 used here (Context + Trustee registries). |
+| `django-trusts` master (PR #53 merge) | `bfd55e23a9c7706271e3560c0ee1804023f1e69f` | Installable 1.0.0.dev0 used here (`KernelConfig`, Context + Trustee registries). |
 | `django-trusts-example` `cursor/winfs-acl-r3-d580` | `8ca7831a45d870e4cec208f350c769a35ab6886a` | Temporary host of the approved `bounded-winfs-acl-r3` slice before this port. |
 
 ## Trusts fits naturally
@@ -27,9 +27,12 @@ Inspected for this revision:
   so each node owns its security-descriptor row.
 - Honest `Context.register_related(WinStream, through='node')` so a
   sidecar shares that node’s DACL — not the parent folder.
-- `manage.py check` stays clean of `trusts.E001` / `trusts.E002`
-  (invalid `Expr` registrations or leftover callable conditions). This
-  project does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
+- `manage.py check` stays clean of `trusts.E001` / `trusts.E002` and
+  kernel `trusts.E006` / `E007` / `E008`. Checks run because
+  `trusts.apps.KernelConfig` is installed, not because of an
+  authentication backend. This project does not set
+  `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS` and does not install
+  `django-trusts-zero`.
 
 Context is the reusable contract. Authorization itself is a remaining-bits
 AccessCheck evaluator over ordinary SID / DACL / `WinNode.parent` tables.
@@ -40,11 +43,12 @@ The evaluator path does **not** consult:
 
 - `Trust`, Trustee adapter, `Content`, `Junction`, `TrustGroup`, `Role`
 - Django `Group`
-- `user.has_perm` / `TrustModelBackend` grant compilation (the backend is
-  installed so Trusts system checks run; AccessCheck does not call it)
+- `user.has_perm` / Zero `TrustModelBackend` grant compilation.
+  Ordinary login is Django `ModelBackend`. AccessCheck does not call
+  `has_perm`.
 
-Trustee at the pinned core revision is a grant-path `Exists` compiler. It
-cannot express stored-order allow/deny, so it is not an honest adapter
+Trustee at the pinned kernel revision is a grant-path `Exists` compiler.
+It cannot express stored-order allow/deny, so it is not an honest adapter
 for this DACL.
 
 Owner authority is an independent relational contribution
@@ -59,5 +63,12 @@ Owner authority is an independent relational contribution
   time. Cycles and depth overflow fail closed.
 - **Fixtures / seed / browser.** Documentation-derived V1–V43 matrix,
   `seed_winfs`, and a minimal authorized-object file browser.
+- **Windows-host oracle.** PowerShell AccessCheck script, catalog
+  schema, and a committed host fixture that stays empty until a real
+  capture is promoted (`windows-host-observed`). See
+  [windows-oracle.md](windows-oracle.md).
 
 See [WINFS_ACL.md](WINFS_ACL.md) for schema, depth, and portability.
+See [WINFS_BROWSER.md](WINFS_BROWSER.md) for `/winfs/` limitations.
+See [migrates.md](../migrates.md) for the ModelBackend / KernelConfig
+settings change (no evaluator method change).

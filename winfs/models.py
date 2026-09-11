@@ -8,6 +8,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from trusts.query import AuthorizedManager
+
 from .constants import (
     ACE_ALLOW,
     ACE_DENY,
@@ -44,8 +46,6 @@ class WinPrincipal(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.RESTRICT,
-        null=True,
-        blank=True,
         related_name="win_principal",
     )
 
@@ -109,7 +109,7 @@ class WinSidMember(models.Model):
 
 
 class WinSecurityDescriptor(models.Model):
-    """Context terminal: owner + SE_DACL_PROTECTED. DACL is ordered WinAce rows.
+    """Policy-set terminal: owner + SE_DACL_PROTECTED. DACL is ordered WinAce rows.
 
     Presence of this row is SE_DACL_PRESENT. Absence on a node is missing
     policy (deny). NULL DACL is not representable.
@@ -227,6 +227,7 @@ class WinNode(models.Model):
         blank=True,
         related_name="node",
     )
+    objects = AuthorizedManager()
 
     class Meta:
         db_table = "win_node"

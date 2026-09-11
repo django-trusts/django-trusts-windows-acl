@@ -7,10 +7,10 @@ win_principal / win_sid_member.
 
 from dataclasses import dataclass
 
+from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
 
-from trusts.context import Context, ContextNotRegistered
-
+from .apps import CANONICAL_BACKEND
 from .constants import (
     MAX_ACE_SCAN,
     MAX_PARENT_DEPTH,
@@ -78,16 +78,26 @@ def _usable_user(user):
     return True
 
 
+def _owner_registered():
+    """True when the consumer owner and OrderedFold plan are live."""
+    from trusts.apps import implementation_for_path
+    from trusts.core import TrustsConfigurationError
+
+    try:
+        owner = implementation_for_path(CANONICAL_BACKEND)
+        handle = owner.configured_backend(CANONICAL_BACKEND)
+    except (TrustsConfigurationError, LookupError, ImproperlyConfigured):
+        return False
+    return bool(handle.registry.strategies)
+
+
 def _context_error(resource):
     model = resource.__class__
-    try:
-        Context.ensure_frozen()
-        Context.get(model)
-    except ContextNotRegistered:
+    if model is not WinNode and model is not WinStream:
         return ERR_CONTEXT
-    if model is WinNode or model is WinStream:
-        return None
-    return ERR_CONTEXT
+    if not _owner_registered():
+        return ERR_CONTEXT
+    return None
 
 
 def _resolve_node(resource):
@@ -411,10 +421,7 @@ def authorized_pks(
     """Authorized-object listing. Filter before ORDER BY / LIMIT. One statement."""
     if not _usable_user(user):
         return []
-    try:
-        Context.ensure_frozen()
-        Context.get(WinNode)
-    except ContextNotRegistered:
+    if not _owner_registered():
         return []
     mapped = map_generic_mask(desired_mask)
     params = _params(user.pk, mapped, candidate_ids, parent_id, max_ace_scan)
@@ -437,10 +444,7 @@ def authorized_nodes(
     """Same one-statement filter as authorized_pks, returning WinNode rows."""
     if not _usable_user(user):
         return []
-    try:
-        Context.ensure_frozen()
-        Context.get(WinNode)
-    except ContextNotRegistered:
+    if not _owner_registered():
         return []
     mapped = map_generic_mask(desired_mask)
     params = _params(user.pk, mapped, candidate_ids, parent_id, max_ace_scan)

@@ -1,71 +1,98 @@
-"""Honest Context registration; no Trustee / Trust grant path."""
+"""Final-core registration: OrderedFold on WinNode, no Context / Trustee."""
 
 import inspect
 
-from trusts.context import Context, ContextNotRegistered
-from trusts.trustee import Trustee
+from django.conf import settings
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
+
+from trusts.core import Along, OrderedFold
 
 from winfs import evaluate
-from winfs.evaluate import access_check
+from winfs.constants import MAX_PARENT_DEPTH, R
+from winfs.evaluate import ERR_CONTEXT, access_check
 from winfs.fixtures import standard_tree
-from winfs.models import WinNode, WinSecurityDescriptor, WinStream
+from winfs.models import WinNode, WinStream
+from winfs.policy import INHERITANCE_WALK, MASK_ENTRIES, NODE_FOLD
 
 from .support import PostgresTestCase
 
 
-class ContextRegistrationTests(PostgresTestCase):
+class CoreRegistrationTests(PostgresTestCase):
     def setUp(self):
         super().setUp()
         self.data = standard_tree()
 
-    def test_direct_node_to_descriptor(self):
-        Context.ensure_frozen()
-        adapter = Context.get(WinNode)
-        self.assertEqual(adapter.kind, Context.KIND_DIRECT)
-        self.assertEqual(adapter.decl, "security_descriptor")
-        self.assertIs(adapter.scope_model(), WinSecurityDescriptor)
-        self.assertTrue(
-            Context.resolves_to_scope(
-                self.data["notes"],
-                self.data["notes"].security_descriptor,
-            )
-        )
+    def _registry(self):
+        from winfs.apps import winfs_config
 
-    def test_related_stream_shares_node_dacl_not_parent(self):
-        stream = WinStream.objects.create(node=self.data["notes"], name="Zone.Identifier")
-        Context.ensure_frozen()
-        adapter = Context.get(WinStream)
-        self.assertEqual(adapter.kind, Context.KIND_RELATED)
-        self.assertEqual(adapter.decl, "node")
+        return winfs_config().configured_backend().registry
+
+    def test_trusts_is_absent_from_installed_apps(self):
+        self.assertNotIn("trusts", settings.INSTALLED_APPS)
+        self.assertNotIn("trusts.apps.KernelConfig", settings.INSTALLED_APPS)
+
+    def test_ordered_fold_is_registered_on_winnode(self):
+        registry = self._registry()
+        self.assertTrue(registry.frozen)
+        self.assertEqual(len(registry.strategies), 1)
+        self.assertEqual(registry.records, ())
+        compiled = registry.plan_for(WinNode).strategy
+        self.assertIsNotNone(compiled)
+        self.assertIs(compiled.content_model, WinNode)
+        self.assertEqual(len(compiled.mask_rows), len(MASK_ENTRIES))
+
+    def test_along_models_parent_bound_not_anypath_grant_walk(self):
+        self.assertIsInstance(INHERITANCE_WALK, Along)
+        self.assertEqual(INHERITANCE_WALK.bound, MAX_PARENT_DEPTH)
+        self.assertEqual(INHERITANCE_WALK.bound, 64)
+        self.assertIsInstance(NODE_FOLD, OrderedFold)
+        registry = self._registry()
+        self.assertEqual(registry.records, ())
+
+    def test_stream_shares_node_dacl_not_parent(self):
+        stream = WinStream.objects.create(
+            node=self.data["notes"],
+            name="Zone.Identifier",
+        )
+        from winfs.fixtures import allow
+
+        allow(self.data["notes"], self.data["alice"], R)
         self.assertTrue(
-            Context.resolves_to_scope(stream, self.data["notes"].security_descriptor)
+            access_check(self.data["users"]["alice"], stream, R).allowed
         )
         self.assertFalse(
-            Context.resolves_to_scope(stream, self.data["secret"].security_descriptor)
+            access_check(
+                self.data["users"]["alice"],
+                self.data["secret"],
+                R,
+            ).allowed
         )
-        child_via_parent = Context.filter_by_scope(
-            WinNode.objects.all(),
-            self.data["secret"].security_descriptor,
-        )
-        self.assertNotIn(self.data["notes"], list(child_via_parent))
 
     def test_evaluate_module_has_no_trust_or_trustee_grant_path(self):
         source = inspect.getsource(evaluate)
         self.assertNotIn("from trusts.models", source)
         self.assertNotIn("from trusts.trustee", source)
-        self.assertNotIn("from trusts.trustee import", source)
+        self.assertNotIn("from trusts.context", source)
         self.assertNotIn("django.contrib.auth.models", source)
 
-    def test_no_honest_trustee_register_is_recorded(self):
-        # Negative validation from r2: Trustee is a grant-path compiler.
-        self.assertTrue(hasattr(Trustee, "register"))
-        self.assertNotIn("Trustee.register", inspect.getsource(evaluate))
-
     def test_unregistered_model_is_deny(self):
-        from winfs.constants import R
-
-        decision = access_check(self.data["users"]["alice"], self.data["alice"].sid, R)
+        decision = access_check(
+            self.data["users"]["alice"],
+            self.data["alice"].sid,
+            R,
+        )
         self.assertFalse(decision.allowed)
-        self.assertEqual(decision.error, "context_not_registered")
-        with self.assertRaises(ContextNotRegistered):
-            Context.get(type(self.data["alice"].sid))
+        self.assertEqual(decision.error, ERR_CONTEXT)
+
+    def test_domain_permissions_exist_for_winnode(self):
+        ct = ContentType.objects.get_for_model(WinNode)
+        for entry in MASK_ENTRIES:
+            codename = "%s_%s" % (entry.action, WinNode._meta.model_name)
+            self.assertTrue(
+                Permission.objects.filter(
+                    content_type=ct,
+                    codename=codename,
+                ).exists(),
+                codename,
+            )

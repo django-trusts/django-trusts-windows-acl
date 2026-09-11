@@ -1,5 +1,7 @@
 """PostgreSQL-first settings for the bounded Windows ACL evaluator.
 
+Core ``trusts`` is a library and must stay absent from INSTALLED_APPS.
+
   DATABASE_URL=postgres://USER:PASS@127.0.0.1:5432/DB \\
     python manage.py test winfs
 """
@@ -38,12 +40,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "trusts",
     "winfs.apps.WinfsConfig",
 ]
 
 AUTHENTICATION_BACKENDS = [
-    "trusts.backends.TrustModelBackend",
+    "django.contrib.auth.backends.ModelBackend",
+    "winfs.backends.WinfsBackend",
 ]
 
 MIDDLEWARE = [

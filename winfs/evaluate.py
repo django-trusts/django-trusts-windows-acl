@@ -1,17 +1,19 @@
 """One PostgreSQL statement: remaining-bits AccessCheck and authorized listing.
 
-This module does not import Trusts grant models or call a Trustee
-grant-path compiler. Token expansion is app-local SQL over
-win_principal / win_sid_member.
+Token expansion matches the registered FlatToken (win_principal +
+win_sid_member). Ordered ACE evaluation matches OrderedFold remaining-bits.
+The ancestor walk uses Along.bound (MAX_PARENT_DEPTH = 64). Inheritance
+flags, owner pre-grant, OWNER_RIGHTS, and depth/cycle gates stay
+consumer-owned: Along is SQLite grant-reachability and cannot share the
+WinNode OrderedFold terminal.
 """
 
 from dataclasses import dataclass
 
 from django.db import connection
 
-from trusts.context import Context, ContextNotRegistered
-
 from .constants import (
+    MASK_32,
     MAX_ACE_SCAN,
     MAX_PARENT_DEPTH,
     READ_CONTROL,
@@ -40,6 +42,7 @@ ERR_CONTEXT = "context_not_registered"
 ERR_ACE_OVERFLOW = "ace_overflow"
 ERR_MISSING_NODE = "missing_node"
 ERR_INACTIVE = "inactive_or_anonymous"
+ERR_INVALID_SOURCE = "invalid_source"
 
 
 @dataclass(frozen=True)
@@ -78,16 +81,25 @@ def _usable_user(user):
     return True
 
 
+def _live_registry():
+    from winfs.apps import winfs_config
+
+    return winfs_config().configured_backend().registry
+
+
+def _node_strategy():
+    registry = _live_registry()
+    plan = registry.plan_for(WinNode)
+    return plan.strategy
+
+
 def _context_error(resource):
     model = resource.__class__
-    try:
-        Context.ensure_frozen()
-        Context.get(model)
-    except ContextNotRegistered:
+    if model is not WinNode and model is not WinStream:
         return ERR_CONTEXT
-    if model is WinNode or model is WinStream:
-        return None
-    return ERR_CONTEXT
+    if _node_strategy() is None:
+        return ERR_CONTEXT
+    return None
 
 
 def _resolve_node(resource):
@@ -184,7 +196,21 @@ gates AS (
          ), false) AS owner_rights,
          COALESCE((
            SELECT COUNT(*) FROM incoming i WHERE i.target_id = c.id
-         ), 0) AS incoming_ace_count
+         ), 0) AS incoming_ace_count,
+         COALESCE((
+           SELECT BOOL_OR(
+             ace.ace_type IS DISTINCT FROM 'allow'
+             AND ace.ace_type IS DISTINCT FROM 'deny'
+             OR ace.ace_order IS NULL
+             OR ace.access_mask IS NULL
+             OR ace.access_mask < 0
+             OR ace.access_mask > %(mask_32)s
+             OR ace.trustee_sid_id IS NULL
+           )
+           FROM anc a
+           JOIN win_ace ace ON ace.descriptor_id = a.sd_id
+           WHERE a.target_id = c.id
+         ), false) AS invalid_source
   FROM candidates c
 ),
 effective AS (
@@ -267,6 +293,7 @@ SELECT c.id,
        g.dangling,
        g.owner_rights,
        g.incoming_ace_count,
+       g.invalid_source,
        last.remaining,
        last.denied,
        (
@@ -276,6 +303,7 @@ SELECT c.id,
          AND NOT g.overflow
          AND NOT g.dangling
          AND NOT g.owner_rights
+         AND NOT g.invalid_source
          AND g.incoming_ace_count <= %(max_ace_scan)s
          AND NOT last.denied
          AND last.remaining = 0
@@ -299,6 +327,7 @@ _ALLOWED_PREDICATE = """
   AND NOT g.overflow
   AND NOT g.dangling
   AND NOT g.owner_rights
+  AND NOT g.invalid_source
   AND g.incoming_ace_count <= %(max_ace_scan)s
   AND NOT last.denied
   AND last.remaining = 0
@@ -342,6 +371,7 @@ def _params(auth_user_id, desired_mask, candidate_ids, parent_id, max_ace_scan):
         "max_ace_scan": int(max_ace_scan),
         "rc": READ_CONTROL,
         "wd": WRITE_DAC,
+        "mask_32": MASK_32,
     }
 
 
@@ -356,6 +386,8 @@ def _error_from_row(row):
         return ERR_DANGLING
     if row["owner_rights"]:
         return ERR_OWNER_RIGHTS
+    if row.get("invalid_source"):
+        return ERR_INVALID_SOURCE
     if not row["sd_present"]:
         return ERR_MISSING_SD
     if row["incoming_ace_count"] > row.get("max_ace_scan_cmp", MAX_ACE_SCAN):
@@ -369,6 +401,23 @@ def _fetch(sql, params):
         cursor.execute(sql, params)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, values)) for values in cursor.fetchall()]
+
+
+def access_check_perm(user, resource, permext):
+    """Map a Django permission code onto AccessCheck, or return None."""
+    if resource is None:
+        return None
+    if not isinstance(resource, (WinNode, WinStream)):
+        return None
+    from winfs.policy import mask_for_perm_code, mask_for_permission
+
+    if isinstance(permext, str):
+        mask = mask_for_perm_code(permext)
+    else:
+        mask = mask_for_permission(permext)
+    if mask is None:
+        return None
+    return access_check(user, resource, mask).allowed
 
 
 def access_check(user, resource, desired_mask, *, max_ace_scan=MAX_ACE_SCAN):
@@ -411,10 +460,7 @@ def authorized_pks(
     """Authorized-object listing. Filter before ORDER BY / LIMIT. One statement."""
     if not _usable_user(user):
         return []
-    try:
-        Context.ensure_frozen()
-        Context.get(WinNode)
-    except ContextNotRegistered:
+    if _node_strategy() is None:
         return []
     mapped = map_generic_mask(desired_mask)
     params = _params(user.pk, mapped, candidate_ids, parent_id, max_ace_scan)
@@ -437,10 +483,7 @@ def authorized_nodes(
     """Same one-statement filter as authorized_pks, returning WinNode rows."""
     if not _usable_user(user):
         return []
-    try:
-        Context.ensure_frozen()
-        Context.get(WinNode)
-    except ContextNotRegistered:
+    if _node_strategy() is None:
         return []
     mapped = map_generic_mask(desired_mask)
     params = _params(user.pk, mapped, candidate_ids, parent_id, max_ace_scan)

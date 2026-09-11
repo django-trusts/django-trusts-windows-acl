@@ -8,11 +8,14 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from trusts.query import AuthorizedManager
+
 from .constants import (
     ACE_ALLOW,
     ACE_DENY,
     KIND_FILE,
     KIND_FOLDER,
+    MASK_32,
     SID_OWNER_RIGHTS,
 )
 
@@ -44,8 +47,6 @@ class WinPrincipal(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.RESTRICT,
-        null=True,
-        blank=True,
         related_name="win_principal",
     )
 
@@ -165,8 +166,8 @@ class WinAce(models.Model):
                 name="win_ace_type",
             ),
             models.CheckConstraint(
-                condition=models.Q(access_mask__gte=0),
-                name="win_ace_mask_nonneg",
+                condition=models.Q(access_mask__gte=0, access_mask__lte=MASK_32),
+                name="win_ace_mask_32bit",
             ),
         ]
         indexes = [
@@ -176,8 +177,12 @@ class WinAce(models.Model):
     def clean(self):
         if self.ace_type not in (ACE_ALLOW, ACE_DENY):
             raise ValidationError("ace_type must be allow or deny.")
-        if self.access_mask is not None and self.access_mask < 0:
-            raise ValidationError("access_mask must be a specific-bit field.")
+        if self.access_mask is not None and (
+            self.access_mask < 0 or self.access_mask > MASK_32
+        ):
+            raise ValidationError(
+                "access_mask must be a 32-bit ACCESS_MASK (0..0xFFFFFFFF)."
+            )
         trustee = self.trustee
         if trustee is None and self.trustee_id is not None:
             trustee = WinSid.objects.filter(pk=self.trustee_id).first()
@@ -227,6 +232,7 @@ class WinNode(models.Model):
         blank=True,
         related_name="node",
     )
+    objects = AuthorizedManager()
 
     class Meta:
         db_table = "win_node"
@@ -247,6 +253,15 @@ class WinNode(models.Model):
             models.Index(fields=("parent",)),
             models.Index(fields=("security_descriptor",)),
             models.Index(fields=("volume",)),
+        ]
+        permissions = [
+            ("read_winnode", "Read node data"),
+            ("write_winnode", "Write node data"),
+            ("execute_winnode", "Execute / traverse node"),
+            ("readwrite_winnode", "Read and write node data"),
+            ("list_winnode", "List directory"),
+            ("read_control_winnode", "Read control"),
+            ("write_dac_winnode", "Write DAC"),
         ]
 
     def __str__(self):

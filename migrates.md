@@ -36,7 +36,7 @@ grant-on-ancestor reachability. The consumer ancestor CTE uses
 | --- | --- | --- |
 | `access_check(user, resource, desired_mask)` | One SQL statement; Context gate | Same signature and V1–V43 outcomes; gate is a live OrderedFold plan; invalid/NULL/negative/>32-bit ACE rows fail closed before applicability (`error=invalid_source`); zero masks stay legal |
 | `authorized_pks` / `authorized_nodes` | One SQL statement; filter then `ORDER BY` / `LIMIT` | Unchanged signatures; same one-statement contract |
-| `user.has_perm('winfs.<action>_winnode', node)` | Not used (backend installed only for checks) | Mapped through `access_check` for domain actions (`read`, `write`, `execute`, `readwrite`, `list`, `read_control`, `write_dac`) |
+| `user.has_perm('winfs.<action>_winnode', node)` | Not used (backend installed only for checks) | Mapped through `access_check` for domain actions (`read`, `write`, `execute`, `readwrite`, `list`, `readcontrol`, `writedac`) |
 | `WinNode.objects.authorized(user, permission)` | Absent | `AuthorizedManager` is installed; listing proofs stay on `authorized_pks` / `authorized_nodes` so inheritance and owner pre-grant remain one statement |
 
 Authorization errors still do not become grants.
@@ -47,6 +47,8 @@ Authorization errors still do not become grants.
 | --- | --- | --- |
 | `WinPrincipal.user` | `null=True` | Required (`null=False`) so FlatToken `principal_user` is a non-null hop |
 | `WinAce.access_mask` | `>= 0` (`win_ace_mask_nonneg`) | `0..0xFFFFFFFF` (`win_ace_mask_32bit`) |
+| `WinAce.trustee` | Field name `trustee`, column `trustee_sid_id` | Field renamed `trustee_sid` so OrderedFold `attname` matches the column |
+| `WinSidMember.group` / `member` | Custom `db_column` vs `attname` | Renamed `group_sid` / `member_sid` so FlatToken SQL uses the stored columns |
 
 Migration `0003_final_core_token_and_mask`. Existing fixture principals
 already have a user.

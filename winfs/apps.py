@@ -5,7 +5,7 @@ from winfs.compat import require_final_core
 _core = require_final_core()
 TrustsImplementationConfig = _core["TrustsImplementationConfig"]
 
-from winfs.backends import CANONICAL_BACKEND
+CANONICAL_BACKEND = "winfs.backends.WinfsBackend"
 
 
 def winfs_config(apps_registry=None):
@@ -48,7 +48,19 @@ class WinfsConfig(TrustsImplementationConfig):
             apps_registry=getattr(self, "apps", None),
         )
         registry = owner.configured_backend(CANONICAL_BACKEND).registry
-        if getattr(self, "_winfs_policy_registry_id", None) is registry:
-            return
-        register_winfs_policy(registry)
-        self._winfs_policy_registry_id = registry
+        if getattr(self, "_winfs_policy_registry_id", None) is not registry:
+            register_winfs_policy(registry)
+            self._winfs_policy_registry_id = registry
+        from django.db.models.signals import post_migrate
+
+        post_migrate.connect(
+            _ensure_domain_permissions_on_migrate,
+            sender=self,
+            dispatch_uid="winfs.ensure_domain_permissions",
+        )
+
+
+def _ensure_domain_permissions_on_migrate(**kwargs):
+    from winfs.policy import ensure_domain_permissions
+
+    ensure_domain_permissions()

@@ -78,13 +78,13 @@ class WinLocalGroup(models.Model):
 class WinSidMember(models.Model):
     """Flat local membership. group_sid is a real FK to win_local_group."""
 
-    group = models.ForeignKey(
+    group_sid = models.ForeignKey(
         WinLocalGroup,
         on_delete=models.RESTRICT,
         related_name="memberships",
         db_column="group_sid_id",
     )
-    member = models.ForeignKey(
+    member_sid = models.ForeignKey(
         WinSid,
         on_delete=models.RESTRICT,
         related_name="group_memberships",
@@ -95,17 +95,17 @@ class WinSidMember(models.Model):
         db_table = "win_sid_member"
         constraints = [
             models.UniqueConstraint(
-                fields=("group", "member"),
+                fields=("group_sid", "member_sid"),
                 name="win_sid_member_pk_pair",
             ),
             models.CheckConstraint(
-                condition=~models.Q(group_id=models.F("member_id")),
+                condition=~models.Q(group_sid_id=models.F("member_sid_id")),
                 name="win_sid_member_not_self",
             ),
         ]
 
     def clean(self):
-        if self.group_id is not None and self.group_id == self.member_id:
+        if self.group_sid_id is not None and self.group_sid_id == self.member_sid_id:
             raise ValidationError("A SID cannot be a member of itself.")
 
 
@@ -141,7 +141,7 @@ class WinAce(models.Model):
     )
     ace_order = models.IntegerField()
     ace_type = models.CharField(max_length=8)
-    trustee = models.ForeignKey(
+    trustee_sid = models.ForeignKey(
         WinSid,
         on_delete=models.RESTRICT,
         related_name="aces",
@@ -183,9 +183,9 @@ class WinAce(models.Model):
             raise ValidationError(
                 "access_mask must be a 32-bit ACCESS_MASK (0..0xFFFFFFFF)."
             )
-        trustee = self.trustee
-        if trustee is None and self.trustee_id is not None:
-            trustee = WinSid.objects.filter(pk=self.trustee_id).first()
+        trustee = self.trustee_sid
+        if trustee is None and self.trustee_sid_id is not None:
+            trustee = WinSid.objects.filter(pk=self.trustee_sid_id).first()
         if trustee is not None and trustee.sid_string == SID_OWNER_RIGHTS:
             raise ValidationError(
                 "OWNER_RIGHTS (S-1-3-4) is excluded; refuse the write."
@@ -260,8 +260,8 @@ class WinNode(models.Model):
             ("execute_winnode", "Execute / traverse node"),
             ("readwrite_winnode", "Read and write node data"),
             ("list_winnode", "List directory"),
-            ("read_control_winnode", "Read control"),
-            ("write_dac_winnode", "Write DAC"),
+            ("readcontrol_winnode", "Read control"),
+            ("writedac_winnode", "Write DAC"),
         ]
 
     def __str__(self):

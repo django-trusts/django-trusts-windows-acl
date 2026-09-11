@@ -90,7 +90,7 @@ def set_dacl_protected(node, *, preserve):
                 descriptor=sd,
                 ace_order=next_order,
                 ace_type=ace.ace_type,
-                trustee=ace.trustee,
+                trustee_sid=ace.trustee_sid,
                 access_mask=ace.access_mask,
                 flag_oi=oi,
                 flag_ci=ci,

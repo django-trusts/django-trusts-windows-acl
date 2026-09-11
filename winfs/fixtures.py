@@ -70,7 +70,7 @@ def local_group(name, sid_string, members=()):
         group.save(update_fields=["name"])
     for member in members:
         member_sid = member.sid if isinstance(member, WinPrincipal) else member
-        WinSidMember.objects.get_or_create(group=group, member=member_sid)
+        WinSidMember.objects.get_or_create(group_sid=group, member_sid=member_sid)
     return group
 
 
@@ -110,7 +110,7 @@ def add_ace(
         descriptor=sd,
         ace_order=order,
         ace_type=ace_type,
-        trustee=trustee_sid,
+        trustee_sid=trustee_sid,
         access_mask=access_mask,
         flag_oi=oi,
         flag_ci=ci,
@@ -142,7 +142,7 @@ def add_ace_raw(sd, ace_type, trustee, access_mask, **flags):
         descriptor=sd,
         ace_order=order,
         ace_type=ace_type,
-        trustee=trustee_sid,
+        trustee_sid=trustee_sid,
         access_mask=access_mask,
         flag_oi=flags.get("oi", False),
         flag_ci=flags.get("ci", False),

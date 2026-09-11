@@ -86,6 +86,9 @@ class CoreRegistrationTests(PostgresTestCase):
         self.assertEqual(decision.error, ERR_CONTEXT)
 
     def test_domain_permissions_exist_for_winnode(self):
+        from winfs.policy import ensure_domain_permissions
+
+        ensure_domain_permissions()
         ct = ContentType.objects.get_for_model(WinNode)
         for entry in MASK_ENTRIES:
             codename = "%s_%s" % (entry.action, WinNode._meta.model_name)

@@ -7,7 +7,12 @@ from unittest.mock import patch
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from winfs.compat import CORE_REQUIREMENT, FLOOR_MESSAGE, require_final_core
+from winfs.compat import (
+    CORE_REQUIREMENT,
+    FLOOR_MESSAGE,
+    require_final_core,
+    require_final_core_backend,
+)
 
 
 class IncompatibleCoreTests(SimpleTestCase):
@@ -34,7 +39,7 @@ class IncompatibleCoreTests(SimpleTestCase):
             backends_mod, "TrustModelBackend", object, create=True
         ):
             with self.assertRaises(ImproperlyConfigured) as ctx:
-                require_final_core()
+                require_final_core_backend()
         self.assertIn("TrustModelBackend", str(ctx.exception))
 
     def test_legacy_context_module_is_refused(self):

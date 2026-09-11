@@ -31,4 +31,19 @@ class Migration(migrations.Migration):
                 name="win_ace_mask_32bit",
             ),
         ),
+        migrations.RenameField(
+            model_name="winace",
+            old_name="trustee",
+            new_name="trustee_sid",
+        ),
+        migrations.RenameField(
+            model_name="winsidmember",
+            old_name="group",
+            new_name="group_sid",
+        ),
+        migrations.RenameField(
+            model_name="winsidmember",
+            old_name="member",
+            new_name="member_sid",
+        ),
     ]

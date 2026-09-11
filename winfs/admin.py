@@ -20,7 +20,7 @@ class WinLocalGroupAdmin(admin.ModelAdmin):
 
 @admin.register(models.WinSidMember)
 class WinSidMemberAdmin(admin.ModelAdmin):
-    list_display = ("group", "member")
+    list_display = ("group_sid", "member_sid")
 
 
 @admin.register(models.WinVolume)

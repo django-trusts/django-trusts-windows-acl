@@ -2,9 +2,9 @@
 
 from django.contrib.auth.backends import ModelBackend
 
-from winfs.compat import require_final_core
+from winfs.compat import require_final_core_backend
 
-_core = require_final_core()
+_core = require_final_core_backend()
 TrustModelBackendMixin = _core["TrustModelBackendMixin"]
 
 CANONICAL_BACKEND = "winfs.backends.WinfsBackend"

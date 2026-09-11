@@ -14,13 +14,13 @@ class SchemaTests(TestCase):
         self.data = standard_tree(volume_name="schema-vol")
 
     def test_membership_group_fk_is_local_group(self):
-        field = WinSidMember._meta.get_field("group")
+        field = WinSidMember._meta.get_field("group_sid")
         self.assertIs(field.remote_field.model, WinLocalGroup)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 WinSidMember.objects.create(
-                    group_id=self.data["alice"].sid_id,
-                    member=self.data["bob"].sid,
+                    group_sid_id=self.data["alice"].sid_id,
+                    member_sid=self.data["bob"].sid,
                 )
                 connection.check_constraints()
 
@@ -46,8 +46,8 @@ class SchemaTests(TestCase):
         with self.assertRaises((ValidationError, IntegrityError)):
             with transaction.atomic():
                 WinSidMember(
-                    group=self.data["eng"],
-                    member=self.data["eng"].sid,
+                    group_sid=self.data["eng"],
+                    member_sid=self.data["eng"].sid,
                 ).full_clean()
 
     def test_owner_rights_write_refused(self):

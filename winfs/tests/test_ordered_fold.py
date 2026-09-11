@@ -14,6 +14,12 @@ from .support import FixtureMixin, PostgresTestCase
 
 
 class OrderedFoldParityTests(FixtureMixin, PostgresTestCase):
+    def setUp(self):
+        super().setUp()
+        from winfs.policy import ensure_domain_permissions
+
+        ensure_domain_permissions()
+
     def _read_perm(self):
         ct = ContentType.objects.get_for_model(WinNode)
         return Permission.objects.get(content_type=ct, codename="read_winnode")
@@ -69,7 +75,7 @@ class OrderedFoldParityTests(FixtureMixin, PostgresTestCase):
 
         self.assertTrue(access_check(self.alice, self.notes, WD).allowed)
         self.assertTrue(
-            self.alice.has_perm("winfs.write_dac_winnode", self.notes)
+            self.alice.has_perm("winfs.writedac_winnode", self.notes)
         )
 
     def test_has_perm_object_decision_is_one_query(self):

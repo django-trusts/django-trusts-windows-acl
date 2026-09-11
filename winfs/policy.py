@@ -38,8 +38,8 @@ MASK_ENTRIES = (
     MaskEntry("execute", X),
     MaskEntry("readwrite", R | W),
     MaskEntry("list", LIST),
-    MaskEntry("read_control", RC),
-    MaskEntry("write_dac", WD),
+    MaskEntry("readcontrol", RC),
+    MaskEntry("writedac", WD),
 )
 
 PERMISSION_DOMAIN = PermissionMaskDomain(Permission, MASK_ENTRIES)
@@ -64,14 +64,14 @@ NODE_FOLD = OrderedFold(
         deny_value="deny",
     ),
     mask=_ace.access_mask,
-    trustee=_ace.trustee,
+    trustee=_ace.trustee_sid,
     token=FlatToken(
         principal=_principal,
         principal_user=_principal.user,
         principal_identity=_principal.sid,
         member=_member,
-        member_identity=_member.member,
-        member_group=_member.group.sid,
+        member_identity=_member.member_sid,
+        member_group=_member.group_sid.sid,
     ),
     domain=PERMISSION_DOMAIN,
 )
@@ -80,6 +80,24 @@ _CODE_TO_MASK = {
     "%s_%s" % (entry.action, WinNode._meta.model_name): entry.mask
     for entry in MASK_ENTRIES
 }
+
+
+def ensure_domain_permissions():
+    """Create OrderedFold domain Permission rows (post-migrate / tests)."""
+    from django.contrib.contenttypes.models import ContentType
+
+    ct = ContentType.objects.get_for_model(WinNode)
+    created = []
+    for entry in MASK_ENTRIES:
+        codename = "%s_%s" % (entry.action, WinNode._meta.model_name)
+        obj, was_created = Permission.objects.get_or_create(
+            content_type=ct,
+            codename=codename,
+            defaults={"name": "WinFS %s" % entry.action},
+        )
+        if was_created:
+            created.append(obj)
+    return created
 
 
 def register_winfs_policy(registry):

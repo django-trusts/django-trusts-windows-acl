@@ -15,28 +15,23 @@ FLOOR_MESSAGE = (
 def require_final_core():
     """Import final public names or raise ``ImproperlyConfigured``.
 
-    Transitional ``KernelConfig`` / core ``AppConfig`` / ``TrustModelBackend``
-    and the removed ``trusts.context`` contract are incompatible.
+    Safe during AppConfig import: does not import ``trusts.backends``
+    (its mixin body calls ``get_permission_model()``).
+
+    Transitional ``KernelConfig`` and the removed ``trusts.context``
+    contract are incompatible.
     """
     try:
         from trusts.apps import TrustsImplementationConfig
-        from trusts.backends import TrustModelBackendMixin
         from trusts.core import Along, FlatToken, OrderedFold, Ref
     except ImportError as exc:
         raise ImproperlyConfigured(FLOOR_MESSAGE) from exc
 
     import trusts.apps as apps_mod
-    import trusts.backends as backends_mod
 
     if hasattr(apps_mod, "KernelConfig"):
         raise ImproperlyConfigured(
             "django-trusts-windows-acl refuses KernelConfig; %s."
-            % CORE_REQUIREMENT
-        )
-    if hasattr(backends_mod, "TrustModelBackend"):
-        raise ImproperlyConfigured(
-            "django-trusts-windows-acl refuses TrustModelBackend; "
-            "use TrustModelBackendMixin. %s."
             % CORE_REQUIREMENT
         )
     try:
@@ -53,6 +48,25 @@ def require_final_core():
         "FlatToken": FlatToken,
         "OrderedFold": OrderedFold,
         "Ref": Ref,
-        "TrustModelBackendMixin": TrustModelBackendMixin,
         "TrustsImplementationConfig": TrustsImplementationConfig,
     }
+
+
+def require_final_core_backend():
+    """Import the mixin after Django models are ready. Refuse TrustModelBackend."""
+    names = require_final_core()
+    try:
+        from trusts.backends import TrustModelBackendMixin
+    except ImportError as exc:
+        raise ImproperlyConfigured(FLOOR_MESSAGE) from exc
+
+    import trusts.backends as backends_mod
+
+    if hasattr(backends_mod, "TrustModelBackend"):
+        raise ImproperlyConfigured(
+            "django-trusts-windows-acl refuses TrustModelBackend; "
+            "use TrustModelBackendMixin. %s."
+            % CORE_REQUIREMENT
+        )
+    names["TrustModelBackendMixin"] = TrustModelBackendMixin
+    return names

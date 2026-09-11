@@ -78,6 +78,36 @@ class OrderedFoldParityTests(FixtureMixin, PostgresTestCase):
             self.alice.has_perm("winfs.writedac_winnode", self.notes)
         )
 
+    def test_wrong_app_perm_code_does_not_authorize(self):
+        from winfs.evaluate import access_check_perm
+        from winfs.policy import mask_for_perm_code
+
+        allow(self.notes, self.data["alice"], R)
+        self.assertTrue(access_check(self.alice, self.notes, R).allowed)
+        self.assertIsNotNone(mask_for_perm_code("winfs.read_winnode"))
+        self.assertIsNone(mask_for_perm_code("auth.read_winnode"))
+        self.assertIsNone(mask_for_perm_code("admin.read_winnode"))
+        self.assertIsNone(access_check_perm(self.alice, self.notes, "auth.read_winnode"))
+        self.assertFalse(self.alice.has_perm("auth.read_winnode", self.notes))
+        self.assertTrue(self.alice.has_perm("winfs.read_winnode", self.notes))
+
+    def test_wrong_content_type_permission_does_not_authorize(self):
+        from django.contrib.auth.models import User
+
+        from winfs.evaluate import access_check_perm
+        from winfs.policy import mask_for_permission
+
+        allow(self.notes, self.data["alice"], R)
+        spoof = Permission.objects.create(
+            content_type=ContentType.objects.get_for_model(User),
+            codename="read_winnode",
+            name="Spoofed read_winnode on User",
+        )
+        self.assertIsNone(mask_for_permission(spoof))
+        self.assertIsNone(access_check_perm(self.alice, self.notes, spoof))
+        self.assertIsNotNone(mask_for_permission(self._read_perm()))
+        self.assertTrue(access_check_perm(self.alice, self.notes, self._read_perm()))
+
     def test_has_perm_object_decision_is_one_query(self):
         allow(self.notes, self.data["alice"], R)
         with CaptureQueriesContext(connection) as captured:

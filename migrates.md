@@ -36,7 +36,7 @@ grant-on-ancestor reachability. The consumer ancestor CTE uses
 | --- | --- | --- |
 | `access_check(user, resource, desired_mask)` | One SQL statement; Context gate | Same signature and V1–V43 outcomes; gate is a live OrderedFold plan; invalid/NULL/negative/>32-bit ACE rows fail closed before applicability (`error=invalid_source`); zero masks stay legal |
 | `authorized_pks` / `authorized_nodes` | One SQL statement; filter then `ORDER BY` / `LIMIT` | Unchanged signatures; same one-statement contract |
-| `user.has_perm('winfs.<action>_winnode', node)` | Not used (backend installed only for checks) | Mapped through `access_check` for domain actions (`read`, `write`, `execute`, `readwrite`, `list`, `readcontrol`, `writedac`) |
+| `user.has_perm('winfs.<action>_winnode', node)` | Not used (backend installed only for checks) | Mapped through `access_check` only for the full `winfs` / `WinNode` identity. Wrong-app strings (`auth.read_winnode`) and same-codename Permission rows on another content type do not map. Domain actions: `read`, `write`, `execute`, `readwrite`, `list`, `readcontrol`, `writedac`. |
 | `WinNode.objects.authorized(user, permission)` | Absent | `AuthorizedManager` is installed; listing proofs stay on `authorized_pks` / `authorized_nodes` so inheritance and owner pre-grant remain one statement |
 
 Authorization errors still do not become grants.
@@ -81,6 +81,9 @@ loads.
       full Windows semantics (inheritance, owner RC\|WD, OWNER_RIGHTS,
       depth/cycle). Do not treat OrderedFold-only `.authorized()` as
       AccessCheck.
+- [ ] Map `has_perm` only for the full `winfs` / `WinNode` identity.
+      `auth.read_winnode` and a same-codename Permission on another
+      content type must not invoke AccessCheck.
 - [ ] Run `0003_final_core_token_and_mask`. Refuse NULL
       `WinPrincipal.user` and ACE masks outside `0..0xFFFFFFFF`.
 - [ ] `manage.py check` must stay clean of `trusts.E001` / `E002`.

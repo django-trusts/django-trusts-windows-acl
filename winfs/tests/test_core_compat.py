@@ -59,3 +59,15 @@ class IncompatibleCoreTests(SimpleTestCase):
         self.assertIn("TrustsImplementationConfig", names)
         self.assertIn("OrderedFold", names)
         self.assertIn("Along", names)
+
+    def test_license_copyright_year_is_2026(self):
+        from pathlib import Path
+
+        text = (
+            Path(__file__).resolve().parents[2] / "LICENSE"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "Copyright (c) 2026, BeeDesk, Inc., and contributors",
+            text,
+        )
+        self.assertNotIn("Copyright (c) 2016", text)

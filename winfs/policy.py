@@ -110,20 +110,48 @@ def register_winfs_policy(registry):
     return registry.register_strategy(NODE_FOLD)
 
 
+def _is_winnode_identity(app_label, model_name):
+    """True only for the canonical ``winfs`` / ``WinNode`` permission identity."""
+    return (
+        app_label == WinNode._meta.app_label
+        and model_name == WinNode._meta.model_name
+    )
+
+
 def mask_for_permission(permission):
-    """Return the 32-bit ACCESS_MASK for a domain permission, or None."""
+    """Return the 32-bit ACCESS_MASK for a WinNode domain permission, or None.
+
+    Requires the ``winfs`` app label and the ``WinNode`` content type. A
+    matching codename on another app or model does not map.
+    """
     if permission is None:
         return None
     codename = getattr(permission, "codename", None)
     if not isinstance(codename, str):
         return None
+    ct = getattr(permission, "content_type", None)
+    if ct is None:
+        return None
+    if not _is_winnode_identity(
+        getattr(ct, "app_label", None),
+        getattr(ct, "model", None),
+    ):
+        return None
     return _CODE_TO_MASK.get(codename)
 
 
 def mask_for_perm_code(permext):
-    """Parse ``app.action_model`` / ``app.action_model:cond`` to a mask."""
+    """Parse ``winfs.action_winnode`` / ``winfs.action_winnode:cond`` to a mask.
+
+    The app label must be ``winfs``. ``auth.read_winnode`` does not map.
+    """
     if not isinstance(permext, str) or "." not in permext:
         return None
-    _app, code = permext.split(".", 1)
+    app, code = permext.split(".", 1)
     code = code.split(":", 1)[0]
+    if app != WinNode._meta.app_label:
+        return None
+    expected_suffix = "_%s" % WinNode._meta.model_name
+    if not code.endswith(expected_suffix):
+        return None
     return _CODE_TO_MASK.get(code)

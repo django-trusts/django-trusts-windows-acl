@@ -31,6 +31,7 @@ CSRF_TRUSTED_ORIGINS = [
 # Match django-trusts: keep AutoField so models do not switch to BigAutoField.
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
+# Core is a Python library. Do not list 'trusts'.
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -38,12 +39,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "trusts",
     "winfs.apps.WinfsConfig",
 ]
 
+# Username/password login is ModelBackend. The Trusts mixin path is
+# owned by WinfsConfig for OrderedFold / has_perm projections.
 AUTHENTICATION_BACKENDS = [
-    "trusts.backends.TrustModelBackend",
+    "django.contrib.auth.backends.ModelBackend",
+    "winfs.backends.WinfsAuthorizationBackend",
 ]
 
 MIDDLEWARE = [

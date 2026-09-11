@@ -33,13 +33,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Django 6.1, Trusts at a2ab5a1, and psycopg
+      - name: Install Django 6.1, final core pin, and this package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install "Django>=6.1,<6.2" dj-database-url "psycopg[binary]>=3.2"
+          PIN=$(tr -d '[:space:]' < scripts/django-trusts.pin)
+          python -m pip install "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@${PIN}"
+          python -m pip install -e .
       - name: Django system checks
         run: python manage.py check
-      - name: winfs matrix, plans, and schema
+      - name: winfs matrix, core proofs, plans, and schema
         run: python manage.py test winfs
       - name: Migrate and seed_winfs
         run: |

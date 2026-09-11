@@ -1,0 +1,7 @@
+# Python >=3.12, Django 6.1.x — matches modernized django-trusts 1.0.0.dev0.
+# Trusts is not a published PyPI 1.0; pin kernel master after #53
+# (KernelConfig, noun-independent Context / Trustee, no Zero).
+Django>=6.1,<6.2
+django-trusts @ git+https://github.com/django-trusts/django-trusts.git@bfd55e23a9c7706271e3560c0ee1804023f1e69f
+dj-database-url>=2.3.0
+psycopg[binary]>=3.2

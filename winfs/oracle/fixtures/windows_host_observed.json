@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "provenance": "windows-host-observed",
+  "status": "pending-host-capture",
+  "host": null,
+  "results": [],
+  "notes": "No native AccessCheck outcomes are recorded in this tree. Linux CI cannot run advapi32 AccessCheck. Run scripts/windows-host-oracle.ps1 on a Windows NTFS host (or the windows-host-oracle GitHub Actions job) and promote the artifact here only after review. Do not copy microsoft-docs allow/deny rows into results."
+}

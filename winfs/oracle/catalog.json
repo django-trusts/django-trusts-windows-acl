@@ -1,0 +1,781 @@
+{
+  "schema_version": 1,
+  "provenance": "microsoft-docs",
+  "source": "Microsoft AccessCheck / ACE inheritance / MS-DTYP as cited on django-trusts#17",
+  "vectors": [
+    {
+      "id": "V1",
+      "title": "empty DACL denies read",
+      "family": "empty-missing",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V2",
+      "title": "missing descriptor denies",
+      "family": "empty-missing",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": "missing_descriptor"
+      },
+      "host_oracle": {
+        "representable": false,
+        "compare": "not-representable",
+        "notes": "Evaluator-local / Trusts Context / operational gate. Not a native AccessCheck vector."
+      }
+    },
+    {
+      "id": "V3",
+      "title": "explicit allow",
+      "family": "ordered-ace",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V4",
+      "title": "canonical deny then allow",
+      "family": "ordered-ace",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Non-canonical order needs a raw SECURITY_DESCRIPTOR (SDDL); high-level APIs canonicalize."
+      }
+    },
+    {
+      "id": "V5",
+      "title": "noncanonical allow then deny is not deny-wins",
+      "family": "ordered-ace",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Non-canonical order needs a raw SECURITY_DESCRIPTOR (SDDL); high-level APIs canonicalize."
+      }
+    },
+    {
+      "id": "V6",
+      "title": "user deny before group allow",
+      "family": "users-groups",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Non-canonical order needs a raw SECURITY_DESCRIPTOR (SDDL); high-level APIs canonicalize."
+      }
+    },
+    {
+      "id": "V7",
+      "title": "group allow for other member",
+      "family": "users-groups",
+      "provenance": "microsoft-docs",
+      "requester": "bob",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V8",
+      "title": "non-member implicit deny",
+      "family": "users-groups",
+      "provenance": "microsoft-docs",
+      "requester": "carol",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V9",
+      "title": "partial bits denied",
+      "family": "requested-bits",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 3,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V10",
+      "title": "allow bits accumulate",
+      "family": "requested-bits",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 3,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V11",
+      "title": "noncanonical allow clears denied bit",
+      "family": "requested-bits",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 2,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Non-canonical order needs a raw SECURITY_DESCRIPTOR (SDDL); high-level APIs canonicalize."
+      }
+    },
+    {
+      "id": "V12",
+      "title": "same as V11 combined request",
+      "family": "requested-bits",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 3,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Non-canonical order needs a raw SECURITY_DESCRIPTOR (SDDL); high-level APIs canonicalize."
+      }
+    },
+    {
+      "id": "V13",
+      "title": "remaining write denied",
+      "family": "requested-bits",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 3,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V14",
+      "title": "owner WRITE_DAC",
+      "family": "owner",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 262144,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Owner is READ_CONTROL|WRITE_DAC, not file data. Set owner SID before AccessCheck."
+      }
+    },
+    {
+      "id": "V15",
+      "title": "owner is not file read",
+      "family": "owner",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Owner is READ_CONTROL|WRITE_DAC, not file data. Set owner SID before AccessCheck."
+      }
+    },
+    {
+      "id": "V16",
+      "title": "owner pre-grant before owner-SID deny",
+      "family": "owner",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 262144,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Owner is READ_CONTROL|WRITE_DAC, not file data. Set owner SID before AccessCheck."
+      }
+    },
+    {
+      "id": "V17",
+      "title": "file inherits OI",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "readme",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V18",
+      "title": "container CI effective",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "proj",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V19",
+      "title": "CI only does not reach file",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "readme",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V20",
+      "title": "OI without IO is effective on container",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "proj",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V21",
+      "title": "OI only file inherits",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "readme",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V22",
+      "title": "OI only child container is inherit-only",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "secret",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V23",
+      "title": "OI only grandchild file inherits",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V24",
+      "title": "NP immediate container",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "secret",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V25",
+      "title": "NP does not reach grandchild",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V26",
+      "title": "protected empty secret",
+      "family": "protected",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "secret",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. SE_DACL_PROTECTED via SetAccessRuleProtection / icacls inheritance disable."
+      }
+    },
+    {
+      "id": "V27",
+      "title": "protect stops walk to notes",
+      "family": "protected",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. SE_DACL_PROTECTED via SetAccessRuleProtection / icacls inheritance disable."
+      }
+    },
+    {
+      "id": "V28",
+      "title": "preserve converts inherited on secret",
+      "family": "protected",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "secret",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. SE_DACL_PROTECTED via SetAccessRuleProtection / icacls inheritance disable."
+      }
+    },
+    {
+      "id": "V29",
+      "title": "preserve children inherit from secret",
+      "family": "protected",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. SE_DACL_PROTECTED via SetAccessRuleProtection / icacls inheritance disable."
+      }
+    },
+    {
+      "id": "V30",
+      "title": "IO skipped on proj",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "proj",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V31",
+      "title": "IO on proj still inheritable",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "readme",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V32",
+      "title": "child read is not parent list",
+      "family": "listing",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "secret",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V33",
+      "title": "folder list allowed",
+      "family": "listing",
+      "provenance": "microsoft-docs",
+      "requester": "bob",
+      "target": "proj",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V34",
+      "title": "name visibility is not read",
+      "family": "listing",
+      "provenance": "microsoft-docs",
+      "requester": "bob",
+      "target": "readme",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host."
+      }
+    },
+    {
+      "id": "V35",
+      "title": "group allow before user deny",
+      "family": "users-groups",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Non-canonical order needs a raw SECURITY_DESCRIPTOR (SDDL); high-level APIs canonicalize."
+      }
+    },
+    {
+      "id": "V36",
+      "title": "cycle fail-closed",
+      "family": "evaluator-local",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": "cycle"
+      },
+      "host_oracle": {
+        "representable": false,
+        "compare": "not-representable",
+        "notes": "Evaluator-local / Trusts Context / operational gate. Not a native AccessCheck vector."
+      }
+    },
+    {
+      "id": "V37",
+      "title": "unregistered resource denies",
+      "family": "evaluator-local",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "unregistered",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": "context_not_registered"
+      },
+      "host_oracle": {
+        "representable": false,
+        "compare": "not-representable",
+        "notes": "Evaluator-local / Trusts Context / operational gate. Not a native AccessCheck vector."
+      }
+    },
+    {
+      "id": "V38",
+      "title": "missing principal",
+      "family": "evaluator-local",
+      "provenance": "microsoft-docs",
+      "requester": "noprincipal",
+      "target": "notes",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": false,
+        "error": "missing_principal"
+      },
+      "host_oracle": {
+        "representable": false,
+        "compare": "not-representable",
+        "notes": "Evaluator-local / Trusts Context / operational gate. Not a native AccessCheck vector."
+      }
+    },
+    {
+      "id": "V39",
+      "title": "new child inherits from proj",
+      "family": "inheritance",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "new",
+      "mask": 1,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Create children after the parent DACL so write-time inheritance applies."
+      }
+    },
+    {
+      "id": "V40",
+      "title": "explicit OWNER_RIGHTS rejected",
+      "family": "owner-rights",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 262144,
+      "docs_expected": {
+        "allowed": false,
+        "error": "owner_rights"
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "expected-divergence",
+        "notes": "Windows applies OWNER_RIGHTS (S-1-3-4) instead of implicit owner bits. This evaluator wholly rejects S-1-3-4 (DENY+error) rather than implementing that substitution. Host capture is allowed; compare is expected-divergence."
+      }
+    },
+    {
+      "id": "V41",
+      "title": "group owner pre-grant",
+      "family": "owner",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 262144,
+      "docs_expected": {
+        "allowed": true,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Owner is READ_CONTROL|WRITE_DAC, not file data. Set owner SID before AccessCheck."
+      }
+    },
+    {
+      "id": "V42",
+      "title": "non-member group owner",
+      "family": "owner",
+      "provenance": "microsoft-docs",
+      "requester": "carol",
+      "target": "notes",
+      "mask": 262144,
+      "docs_expected": {
+        "allowed": false,
+        "error": null
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "must-match",
+        "notes": "Native NTFS DACL + advapi32 AccessCheck on a Windows host. Owner is READ_CONTROL|WRITE_DAC, not file data. Set owner SID before AccessCheck."
+      }
+    },
+    {
+      "id": "V43",
+      "title": "inherited OWNER_RIGHTS rejected",
+      "family": "owner-rights",
+      "provenance": "microsoft-docs",
+      "requester": "alice",
+      "target": "notes",
+      "mask": 262144,
+      "docs_expected": {
+        "allowed": false,
+        "error": "owner_rights"
+      },
+      "host_oracle": {
+        "representable": true,
+        "compare": "expected-divergence",
+        "notes": "Windows applies OWNER_RIGHTS (S-1-3-4) instead of implicit owner bits. This evaluator wholly rejects S-1-3-4 (DENY+error) rather than implementing that substitution. Host capture is allowed; compare is expected-divergence."
+      }
+    }
+  ]
+}

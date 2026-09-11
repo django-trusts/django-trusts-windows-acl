@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  winfs-postgres:
+    name: winfs AccessCheck (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: winfs
+          POSTGRES_PASSWORD: winfs
+          POSTGRES_DB: winfs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U winfs -d winfs"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      DATABASE_URL: postgres://winfs:winfs@127.0.0.1:5432/winfs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Django 6.1, Trusts 1.0.0.dev3 (1e19b5d), and psycopg
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Django system checks
+        run: python manage.py check
+      - name: winfs matrix, plans, and schema
+        run: python manage.py test winfs
+      - name: Migrate and seed_winfs
+        run: |
+          python manage.py migrate --noinput
+          python manage.py seed_winfs

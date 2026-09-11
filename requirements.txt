@@ -1,0 +1,7 @@
+# Python >=3.12, Django 6.1.x — matches django-trusts 1.0.0.dev3.
+# Constraint is django-trusts>=1.0.0.dev3,<2. That range is not on PyPI
+# yet; install the final core merge first (or use a companion wheel).
+Django>=6.1,<6.2
+django-trusts @ git+https://github.com/django-trusts/django-trusts.git@1e19b5d464c067186aada58943c3ee67c44b2aa0
+dj-database-url>=2.3.0
+psycopg[binary]>=3.2

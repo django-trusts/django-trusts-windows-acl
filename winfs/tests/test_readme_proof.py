@@ -1,6 +1,6 @@
 """Reusable documentation fixture: copyable README facts (#5).
 
-Locks install/config/registration/package spellings for the later
+Locks install/config/registration/package spellings for the public
 README/DEV cut. Does not change evaluator semantics or public callables.
 """
 
@@ -73,12 +73,12 @@ class ReadmeProofPackageTests(SimpleTestCase):
         text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn('name = "django-trusts-windows-acl"', text)
         self.assertIn('version = "0.1.0.dev0"', text)
+        self.assertIn('readme = "README.md"', text)
+        self.assertIn('license = { file = "LICENSE" }', text)
+        self.assertIn('authors = [{ name = "BeeDesk, Inc." }]', text)
         self.assertIn('requires-python = ">=3.12"', text)
         self.assertIn('"Django>=6.1,<6.2"', text)
         self.assertIn('"django-trusts>=1.0.0.dev3,<2"', text)
-        self.assertNotIn("readme", text)
-        self.assertNotIn("license", text)
-        self.assertNotIn("authors", text)
         self.assertIn('include = ["config*", "winfs*"]', text)
 
     def test_requirements_pin_and_ci_matrix(self):
@@ -89,17 +89,42 @@ class ReadmeProofPackageTests(SimpleTestCase):
             req,
         )
         self.assertIn("Django>=6.1,<6.2", req)
-        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
         self.assertIn('python-version: "3.12"', ci)
         self.assertIn("image: postgres:16", ci)
         self.assertIn("python manage.py test winfs", ci)
-        self.assertEqual((ROOT / ".python-version").read_text(encoding="utf-8").strip(), "3.12")
+        self.assertEqual(
+            (ROOT / ".python-version").read_text(encoding="utf-8").strip(),
+            "3.12",
+        )
 
     def test_license_file_is_bsd_2_clause_with_beedesk_2026(self):
         text = (ROOT / "LICENSE").read_text(encoding="utf-8")
-        self.assertIn("Copyright (c) 2026, BeeDesk, Inc.", text)
+        self.assertEqual(
+            text.splitlines()[0],
+            "Copyright (c) 2026, BeeDesk, Inc.",
+        )
         self.assertIn("Redistribution and use in source and binary forms", text)
         self.assertIn("this list of conditions and the following disclaimer", text)
         self.assertNotIn("3. Neither the name", text)
-        # Current notice still has the extra clause Chat must drop later.
-        self.assertIn("BeeDesk, Inc., and contributors", text)
+        self.assertNotIn("BeeDesk, Inc., and contributors", text)
+
+    def test_public_readme_and_development_record_are_separate(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        dev = (ROOT / "DEV.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "Relational, queryable Windows-style permissions for Django.",
+            readme,
+        )
+        self.assertIn("winfs.apps.WinfsConfig", readme)
+        self.assertIn("winfs.backends.WinfsBackend", readme)
+        self.assertIn("access_check(request.user, node, R)", readme)
+        self.assertIn("authorized_nodes(", readme)
+        self.assertIn("not a complete Windows ACL implementation", readme)
+        self.assertNotIn("bounded-winfs-acl-r3", readme)
+        self.assertNotIn("1e19b5d464c067186aada58943c3ee67c44b2aa0", readme)
+        self.assertIn("Internal development record", dev)
+        self.assertIn("may no longer describe the supported public package", dev)
+        self.assertIn("bounded-winfs-acl-r3", dev)

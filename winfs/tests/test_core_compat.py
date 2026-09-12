@@ -67,7 +67,8 @@ class IncompatibleCoreTests(SimpleTestCase):
             Path(__file__).resolve().parents[2] / "LICENSE"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "Copyright (c) 2026, BeeDesk, Inc., and contributors",
+            "Copyright (c) 2026, BeeDesk, Inc.",
             text,
         )
+        self.assertNotIn("BeeDesk, Inc., and contributors", text)
         self.assertNotIn("Copyright (c) 2016", text)

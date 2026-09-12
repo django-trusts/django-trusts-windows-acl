@@ -1,98 +1,130 @@
 # django-trusts-windows-acl
 
-django-trusts-windows-acl is a bounded relational implementation of Windows filesystem DACL semantics for Django. It models SIDs, local groups, security descriptors, ownership, ordered allow/deny ACEs, and inherited permissions, with object checks and authorized listings evaluated in fixed SQL queries.
+Relational, queryable Windows-style permissions for Django.
 
-The project validates final django-trusts core (`OrderedFold`, `Along`,
-`TrustsImplementationConfig`) while keeping Windows-specific policy data
-and evaluation on this consumer. It is a reference implementation—not a
-complete replacement for Windows AccessCheck—and explicitly fails closed
-for unsupported Windows security features.
+`django-trusts-windows-acl` is a bounded reference implementation of explicit, table-defined authorization on [django-trusts](https://github.com/django-trusts/django-trusts) 1.x. SIDs, local-group membership, security descriptors, ownership, and ordered allow/deny entries are ordinary Django rows. The same registered policy drives both one-object decisions and authorized listings, each in one PostgreSQL statement.
 
-This is the implementation repository for the Windows ACL validation on
-[django-trusts#17](https://github.com/django-trusts/django-trusts/issues/17)
-(`bounded-winfs-acl-r3` on final core). django-trusts core is not modified.
+Use this project to study or build ACL-shaped authorization where permissions are stored as data and filtering must happen before pagination. It also includes a small file-browser demo.
 
-It depends on
-[django-trusts](https://github.com/django-trusts/django-trusts)
-**`>=1.0.0.dev3,<2`** at revision
-[`1e19b5d464c067186aada58943c3ee67c44b2aa0`](https://github.com/django-trusts/django-trusts/commit/1e19b5d464c067186aada58943c3ee67c44b2aa0).
-Do not list `'trusts'` in `INSTALLED_APPS`.
+> This is deliberately a supported subset, not a complete Windows ACL implementation or a replacement for Windows `AccessCheck`. The current validation vectors are derived from Microsoft documentation rather than captured from a Windows host.
 
-Requires **Python ≥ 3.12** and **PostgreSQL 14+**.
+## Quick start
 
-## Setup
+From a source checkout:
 
 ```bash
+git clone https://github.com/django-trusts/django-trusts-windows-acl.git
+cd django-trusts-windows-acl
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-createdb winfs   # or any PostgreSQL 14+ database
+createdb winfs
 export DATABASE_URL=postgres://USER:PASS@127.0.0.1:5432/winfs
 python manage.py migrate
 python manage.py seed_winfs
 python manage.py runserver
 ```
 
-When `DATABASE_URL` is unset, settings default to
-`postgres://winfs:winfs@127.0.0.1:5432/winfs`. The official PostgreSQL
-image user (and CI) is a superuser. A locally created role needs
-permission to `SET session_replication_role` so V36 / V40 / V43 can
-bypass write triggers and insert OWNER_RIGHTS or cycle rows that
-writers refuse (`ALTER USER winfs WITH SUPERUSER` is enough).
+Open <http://127.0.0.1:8000/winfs/> and sign in as `alice`, `bob`, `carol`, or `admin`; the seeded password is `demo`.
 
-Open http://127.0.0.1:8000/winfs/ and log in. Seeded passwords are `demo`.
+The package requires Python 3.12 or newer, Django 6.1, django-trusts 1.x, and PostgreSQL 14 or newer. CI runs on PostgreSQL 16.
 
-| User | What the seed is for |
-| --- | --- |
-| `alice` | `eng` member; reads `vol/` and `proj/` via group allow |
-| `bob` | `eng` member; same group allow as alice |
-| `carol` | no `eng` membership; AccessCheck denies the seeded tree |
-| `admin` | volume-root owner (owner pre-grant is RC\|WD, not full control) |
+## Configure Django
 
-The browser uses authorized-object listing, not “LIST on the folder ⇒
-show every child name”. See [docs/WINFS_ACL.md](docs/WINFS_ACL.md).
-
-## Checks
-
-```bash
-python manage.py check
-python manage.py test winfs
-```
-
-`manage.py check` must stay clean of `trusts.E001` / `trusts.E002`.
-This project does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
-PostgreSQL is required for OrderedFold evaluate.
-
-The suite covers the V1–V43 matrix, depths 63/64/65, V38′, cycles,
-group ownership, query-count, and inspected plans (shallow, depth-8,
-1,000-sibling / two-group, protected mid-tree). Plans are written under
-[docs/winfs-plans/](docs/winfs-plans/).
-
-CI runs that suite against **PostgreSQL 16**.
-
-## Portability
-
-Schema, matrix, and evaluator semantics are database-neutral. PostgreSQL
-14+ is the first reference implementation and the inspected-plan backend
-(recursive CTE, deterministic ACE sequencing, integer bit ops,
-fail-closed cycle/depth). This slice does not ship a second SQL dialect.
-
-Vectors remain **documentation-derived** until separately verified
-against a Windows host.
-
-## What Trusts is used for
+Add the implementation app and its object-permission backend:
 
 ```python
-registry.register_strategy(OrderedFold(...))  # WinNode remaining-bits
-Along(Ref(WinNode).parent, bound=64)          # parent-link cap only
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "winfs.apps.WinfsConfig",
+]
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "winfs.backends.WinfsBackend",
+]
 ```
 
-No `Trust`, Trustee, `Content`, `Junction`, `TrustGroup`, `Role`,
-Django `Group`, or `Context` is on the evaluator path. See
-[docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md) and [migrates.md](migrates.md).
+`WinfsConfig` owns and registers the Windows policy. `django-trusts` is used as a Python library, so it is not a separate installed app. Django's `ModelBackend` continues to handle login and model-level permissions; `WinfsBackend` handles object permissions for `WinNode` and `WinStream`.
 
-## Trusts dependency
+## Persist policy as data
 
-`requirements.txt` installs Trusts from the git SHA above. Package
-metadata on that revision is `1.0.0.dev3`. The declared constraint is
-`django-trusts>=1.0.0.dev3,<2`.
+The evaluator reads normal relational state:
+
+- `WinSid` identifies users and local groups.
+- `WinPrincipal` and `WinSidMember` build the requester's flat token.
+- `WinSecurityDescriptor` stores ownership and DACL-protection state.
+- ordered `WinAce` rows store trustee, allow/deny polarity, inheritance flags, and a 32-bit access mask.
+- `WinNode.parent` forms the bounded resource tree; `WinStream` shares its node's DACL.
+
+The implementation registers an `OrderedFold` strategy for `WinNode`. The actual consumer-owned registration is exposed through one tested function:
+
+```python
+from winfs.policy import register_winfs_policy
+
+register_winfs_policy(registry)
+```
+
+The parent declaration is likewise explicit and bounded:
+
+```python
+from trusts.core import Along, Ref
+from winfs.models import WinNode
+
+INHERITANCE_WALK = Along(Ref(WinNode).parent, bound=64)
+```
+
+See [`winfs/policy.py`](winfs/policy.py) for the complete `OrderedFold`, permission-mask domain, and token declaration.
+
+## Authorize objects and listings
+
+Use the same policy for a single object, a filtered listing, or Django's familiar permission API:
+
+```python
+from winfs.constants import R
+from winfs.evaluate import access_check, authorized_nodes
+
+decision = access_check(request.user, node, R)
+visible_children = authorized_nodes(
+    request.user,
+    R,
+    parent_id=folder.pk,
+    limit=25,
+)
+allowed = request.user.has_perm("winfs.read_winnode", node)
+```
+
+`access_check()` returns an `AccessDecision`. `authorized_nodes()` and `authorized_pks()` filter unauthorized rows before `ORDER BY`, `LIMIT`, and `OFFSET`; they do not enumerate objects in Python. Folder LIST permission allows the browser to enumerate children, but each child must still pass its own authorization check.
+
+## Supported subset
+
+- stored-order, remaining-bits allow/deny evaluation;
+- object inheritance and container inheritance (`OI`, `CI`, `NP`, and `IO`), including protected DACLs;
+- owner pre-grant of `READ_CONTROL | WRITE_DAC`, not full control;
+- flat local-group membership;
+- 32-bit access masks and request-side `GENERIC_*` mapping;
+- one SQL statement for shallow, depth-8, protected-midtree, and authorized-listing cases;
+- a maximum of 64 parent links and 4,096 incoming ACEs.
+
+Malformed or unsupported policy fails closed. Missing principals or descriptors, cycles, dangling parents, depth or ACE overflow, invalid masks, unregistered resources, and unsupported `OWNER_RIGHTS` entries cannot become grants.
+
+Not implemented: SACL/auditing, conditional ACEs, privileges, nested-group expansion, Windows `OWNER_RIGHTS` substitution, or a second SQL dialect. Real applications still need validation for their own policy-editing workflows and threat model.
+
+## Project family and further reading
+
+- [django-trusts](https://github.com/django-trusts/django-trusts): the declarative relational-authorization core.
+- [django-trusts-gh-permissions](https://github.com/django-trusts/django-trusts-gh-permissions): permissions implied by organization and team relationships.
+- [django-trusts-zero](https://github.com/django-trusts/django-trusts-zero): the concrete continuation and migration path for django-trusts 0.x.
+- [Windows ACL model and proof notes](docs/WINFS_ACL.md)
+- [How this consumer uses Trusts](docs/TRUSTS_FIT.md)
+- [Development and historical record](DEV.md)
+- [Migration notes](migrates.md)
+
+## License
+
+BSD 2-Clause. Copyright © 2026 BeeDesk, Inc.

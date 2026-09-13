@@ -1,10 +1,12 @@
 """Final-core registration: OrderedFold on WinNode, Along as the parent bound.
 
-Along is not passed to ``register()``. AnyPath and OrderedFold cannot share
-one content terminal, and the Along grant-reachability renderer is
-SQLite-only. Windows ACE inheritance (OI/CI/NP/IO, protected, IO-only)
-is not grant-on-ancestor reachability. The consumer ancestor CTE uses
-``INHERITANCE_WALK.bound`` (64) as the parent-link cap.
+Donate through the configured backend's dedicated OrderedFold method.
+Along is not passed to ``register_relationship(..., along=)``. AnyPath
+and OrderedFold cannot share one content terminal, and the Along
+grant-reachability renderer is SQLite-only. Windows ACE inheritance
+(OI/CI/NP/IO, protected, IO-only) is not grant-on-ancestor
+reachability. The consumer ancestor CTE uses ``INHERITANCE_WALK.bound``
+(64) as the parent-link cap.
 """
 
 from django.contrib.auth.models import Permission
@@ -22,6 +24,7 @@ from winfs.constants import (
 
 _core = require_final_core()
 Along = _core["Along"]
+BackendHandle = _core["BackendHandle"]
 FlatToken = _core["FlatToken"]
 OrderedFold = _core["OrderedFold"]
 Ref = _core["Ref"]
@@ -44,37 +47,36 @@ MASK_ENTRIES = (
 
 PERMISSION_DOMAIN = PermissionMaskDomain(Permission, MASK_ENTRIES)
 
-_node = Ref(WinNode)
-_ace = Ref(WinAce)
-_principal = Ref(WinPrincipal)
-_member = Ref(WinSidMember)
-
 # Typed bound for the consumer parent walk. Not an AnyPath along=.
-INHERITANCE_WALK = Along(_node.parent, bound=MAX_PARENT_DEPTH)
+INHERITANCE_WALK = Along(Ref(WinNode).parent, bound=MAX_PARENT_DEPTH)
 
 NODE_FOLD = OrderedFold(
-    content=_node,
-    descriptor=_node.security_descriptor,
-    source=_ace,
-    source_descriptor=_ace.descriptor,
-    order=_ace.ace_order,
+    content=WinNode,
+    descriptor="security_descriptor",
+    source_descriptor="descriptor",
+    order="ace_order",
     polarity=PolarityMap(
-        _ace.ace_type,
+        "ace_type",
         allow_value="allow",
         deny_value="deny",
     ),
-    mask=_ace.access_mask,
-    trustee=_ace.trustee_sid,
+    mask="access_mask",
+    trustee="trustee_sid",
     token=FlatToken(
-        principal=_principal,
-        principal_user=_principal.user,
-        principal_identity=_principal.sid,
-        member=_member,
-        member_identity=_member.member_sid,
-        member_group=_member.group_sid.sid,
+        principal=WinPrincipal,
+        principal_user="user",
+        principal_identity="sid",
+        member=WinSidMember,
+        member_identity="member_sid",
+        member_group="group_sid__sid",
     ),
     domain=PERMISSION_DOMAIN,
 )
+
+# Public configured-backend identity for repeated startup donation.
+# BackendHandle equality is (path, registry, compiler), so a swapped
+# store re-donates and the same configured backend does not.
+_donated_backends = set()
 
 _CODE_TO_MASK = {
     "%s_%s" % (entry.action, WinNode._meta.model_name): entry.mask
@@ -100,14 +102,21 @@ def ensure_domain_permissions():
     return created
 
 
-def register_winfs_policy(registry):
-    """Donate the WinNode OrderedFold plan. Idempotent on the same registry."""
-    if any(
-        compiled.content_model is WinNode
-        for compiled in registry.strategies
-    ):
-        return registry.strategies
-    return registry.register_strategy(NODE_FOLD)
+def register_winfs_policy(backend):
+    """Donate the WinNode OrderedFold plan through the configured backend.
+
+    Idempotent on the same configured-backend identity. Does not inspect
+    private registry state for donation or idempotency.
+    """
+    if not isinstance(backend, BackendHandle):
+        raise TypeError(
+            "register_winfs_policy requires a configured backend, not %r."
+            % (type(backend).__name__,)
+        )
+    if backend in _donated_backends:
+        return
+    backend.register_ordered_fold(WinAce, NODE_FOLD)
+    _donated_backends.add(backend)
 
 
 def _is_winnode_identity(app_label, model_name):

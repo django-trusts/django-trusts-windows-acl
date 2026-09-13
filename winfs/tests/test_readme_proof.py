@@ -23,7 +23,7 @@ from trusts.core import Along, FlatToken, OrderedFold
 from winfs.constants import MAX_PARENT_DEPTH, R, RC, WD
 from winfs.evaluate import access_check, authorized_nodes, authorized_pks
 from winfs.fixtures import allow
-from winfs.models import WinNode
+from winfs.models import WinAce, WinNode, WinPrincipal, WinSidMember
 from winfs.policy import INHERITANCE_WALK, NODE_FOLD, register_winfs_policy
 
 from .support import FixtureMixin, PostgresTestCase
@@ -41,9 +41,11 @@ COPYABLE_AUTHENTICATION_BACKENDS = [
 
 # --- Copyable registration (live ``winfs.policy``) ---
 #
-# registry.register_strategy(NODE_FOLD)
+# backend.register_ordered_fold(WinAce, NODE_FOLD)
+# register_winfs_policy(backend)
 # INHERITANCE_WALK = Along(Ref(WinNode).parent, bound=64)
-# Along is not register(along=) and is not AnyPath grant-reachability.
+# Along is not register_relationship(along=) and is not AnyPath
+# grant-reachability.
 
 # --- Copyable authorization surface ---
 #
@@ -66,10 +68,13 @@ class ReadmeProofTests(FixtureMixin, PostgresTestCase):
         ct = ContentType.objects.get_for_model(WinNode)
         return Permission.objects.get(content_type=ct, codename="read_winnode")
 
-    def _registry(self):
+    def _backend(self):
         from winfs.apps import winfs_config
 
-        return winfs_config().configured_backend().registry
+        return winfs_config().configured_backend()
+
+    def _registry(self):
+        return self._backend().registry
 
     def _assert_one_statement(self, fn):
         with CaptureQueriesContext(connection) as captured:
@@ -96,22 +101,29 @@ class ReadmeProofTests(FixtureMixin, PostgresTestCase):
 
     def test_copyable_ordered_fold_and_consumer_along(self):
         self.assertIsInstance(NODE_FOLD, OrderedFold)
-        self.assertEqual(repr(NODE_FOLD.content), "Ref(WinNode)")
-        self.assertEqual(repr(NODE_FOLD.source), "Ref(WinAce)")
+        self.assertIs(NODE_FOLD.content, WinNode)
+        self.assertEqual(NODE_FOLD.descriptor, "security_descriptor")
+        self.assertIsNone(NODE_FOLD.source)
+        self.assertEqual(NODE_FOLD.source_descriptor, "descriptor")
         self.assertIsInstance(NODE_FOLD.token, FlatToken)
-        self.assertEqual(repr(NODE_FOLD.token.principal), "Ref(WinPrincipal)")
-        self.assertEqual(repr(NODE_FOLD.token.member), "Ref(WinSidMember)")
+        self.assertIs(NODE_FOLD.token.principal, WinPrincipal)
+        self.assertIs(NODE_FOLD.token.member, WinSidMember)
+        self.assertEqual(NODE_FOLD.token.member_group, "group_sid__sid")
         self.assertIsInstance(INHERITANCE_WALK, Along)
         self.assertEqual(INHERITANCE_WALK.bound, MAX_PARENT_DEPTH)
         self.assertEqual(INHERITANCE_WALK.bound, 64)
         self.assertEqual(repr(INHERITANCE_WALK), "Along(Ref(WinNode).parent, bound=64)")
-        registry = self._registry()
+        backend = self._backend()
+        registry = backend.registry
         self.assertEqual(registry.records, ())
         self.assertEqual(len(registry.strategies), 1)
         self.assertIs(registry.plan_for(WinNode).strategy.content_model, WinNode)
         before = registry.strategies
-        again = register_winfs_policy(registry)
-        self.assertEqual(again, before)
+        with CaptureQueriesContext(connection) as captured:
+            register_winfs_policy(backend)
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertEqual(registry.strategies, before)
+        self.assertIs(registry.plan_for(WinNode).strategy.source_model, WinAce)
 
     def test_object_and_listing_share_accesscheck_surface(self):
         allow(self.notes, self.data["alice"], R)
@@ -231,14 +243,40 @@ class ReadmePackageProofTests(PostgresTestCase):
         )
         self.assertIn("winfs.apps.WinfsConfig", readme)
         self.assertIn("winfs.backends.WinfsBackend", readme)
+        self.assertIn("backend.register_ordered_fold(", readme)
+        self.assertIn("register_winfs_policy(backend)", readme)
         self.assertIn("access_check(request.user, node, R)", readme)
         self.assertIn("authorized_nodes(", readme)
         self.assertIn("not a complete Windows ACL implementation", readme)
         self.assertNotIn("bounded-winfs-acl-r3", readme)
+        self.assertNotIn("register_strategy", readme)
+        self.assertNotIn("registry.register", readme)
+        for stale_sha in (
+            "1e19b5d464c067186aada58943c3ee67c44b2aa0",
+            "6cf12d990c65e20dc862ed1dd1db8f8ec4f874be",
+            "f5211c11047eb6810680f5d1b13bf34b2c376635",
+        ):
+            self.assertNotIn(stale_sha, readme)
+        requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+        self.assertIn(
+            "f5211c11047eb6810680f5d1b13bf34b2c376635",
+            requirements,
+        )
         self.assertNotIn(
             "1e19b5d464c067186aada58943c3ee67c44b2aa0",
-            readme,
+            requirements,
         )
+        migrates = (ROOT / "migrates.md").read_text(encoding="utf-8")
+        self.assertIn("backend.register_ordered_fold(", migrates)
+        self.assertIn("register_winfs_policy(backend)", migrates)
+        self.assertIn(".registry", migrates)
+        self.assertIn("Ref(", migrates)
+        self.assertIn("register_strategy(", migrates)
+        self.assertIn(".register(", migrates)
+        self.assertIn("1e19b5d464c067186aada58943c3ee67c44b2aa0", migrates)
+        self.assertIn("6cf12d990c65e20dc862ed1dd1db8f8ec4f874be", migrates)
+        self.assertIn("f5211c11047eb6810680f5d1b13bf34b2c376635", migrates)
+        self.assertIn("register_winfs_policy(", migrates)
         self.assertIn("Internal development record", dev)
         self.assertIn(
             "may no longer describe the supported public package",

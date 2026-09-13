@@ -8,21 +8,25 @@ Inspected for this revision:
 
 | Tree | Commit | What it is |
 | --- | --- | --- |
-| `django-trusts` master | `1e19b5d464c067186aada58943c3ee67c44b2aa0` | `1.0.0.dev3` library cutover. Constraint `django-trusts>=1.0.0.dev3,<2`. |
+| `django-trusts` master | `f5211c11047eb6810680f5d1b13bf34b2c376635` | C-methods merge. Dedicated `backend.register_ordered_fold`. Constraint `django-trusts>=1.0.0.dev3,<2`. |
 | This repository | PR #1 merge `b8fff123e173928ab9775d2ce4072197192c7f13` | Preserved V1–V43 evaluator baseline. |
 
 ## Trusts fits naturally
 
 - Consumer-owned `TrustsImplementationConfig` (`winfs.apps.WinfsConfig`)
   with exact backend path `winfs.backends.WinfsBackend`.
-- `registry.register_strategy(OrderedFold)` on `WinNode`: ordered
-  remaining-bits over `WinAce`, FlatToken via `WinPrincipal` /
-  `WinSidMember`, 32-bit `ACCESS_MASK` domain.
+- `backend.register_ordered_fold(WinAce, OrderedFold(...))` on the
+  configured backend: ordered remaining-bits over `WinAce`, FlatToken
+  via `WinPrincipal` / `WinSidMember`, 32-bit `ACCESS_MASK` domain.
+  Public `content` is `WinNode`. `descriptor` is content-relative
+  (`security_descriptor`); `source_descriptor` is source-relative
+  (`descriptor`). The two paths converge on the stored security
+  descriptor.
 - `Along(Ref(WinNode).parent, bound=64)` names the parent-link cap used
-  by the consumer ancestor CTE. It is **not** `register(along=)`:
-  AnyPath and OrderedFold cannot share one terminal, Along SQL is
-  SQLite-only, and ACE inheritance flags are not grant-on-ancestor
-  reachability.
+  by the consumer ancestor CTE. It is **not**
+  `register_relationship(..., along=)`: AnyPath and OrderedFold cannot
+  share one terminal, Along SQL is SQLite-only, and ACE inheritance
+  flags are not grant-on-ancestor reachability.
 - Core `trusts` is absent from `INSTALLED_APPS`. `manage.py check` stays
   clean of `trusts.E001` / `trusts.E002`. This project does not set
   `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
@@ -38,6 +42,9 @@ The evaluator path does **not** consult:
 - Django `Group`
 - `trusts.context.Context` or `trusts.trustee.Trustee`
 - Transitional `KernelConfig` / core `AppConfig` / `TrustModelBackend`
+- Application-facing `.registry.register_strategy(...)`, public `Ref`
+  construction on the OrderedFold declaration, or the temporary
+  `backend.register(..., strategy=...)` forwarder
 
 ## Application code that remains
 

@@ -20,7 +20,7 @@ This is the implementation repository for the Windows ACL validation on
 It depends on
 [django-trusts](https://github.com/django-trusts/django-trusts)
 **`>=1.0.0.dev3,<2`** at revision
-[`1e19b5d464c067186aada58943c3ee67c44b2aa0`](https://github.com/django-trusts/django-trusts/commit/1e19b5d464c067186aada58943c3ee67c44b2aa0).
+[`f5211c11047eb6810680f5d1b13bf34b2c376635`](https://github.com/django-trusts/django-trusts/commit/f5211c11047eb6810680f5d1b13bf34b2c376635).
 Do not list `'trusts'` in `INSTALLED_APPS`.
 
 Requires **Python ≥ 3.12** and **PostgreSQL 14+**.
@@ -88,8 +88,8 @@ against a Windows host.
 ## What Trusts is used for
 
 ```python
-registry.register_strategy(OrderedFold(...))  # WinNode remaining-bits
-Along(Ref(WinNode).parent, bound=64)          # parent-link cap only
+backend.register_ordered_fold(WinAce, OrderedFold(...))  # WinNode remaining-bits
+Along(Ref(WinNode).parent, bound=64)                      # parent-link cap only
 ```
 
 No `Trust`, Trustee, `Content`, `Junction`, `TrustGroup`, `Role`,

@@ -62,15 +62,45 @@ The evaluator reads normal relational state:
 - ordered `WinAce` rows store trustee, allow/deny polarity, inheritance flags, and a 32-bit access mask.
 - `WinNode.parent` forms the bounded resource tree; `WinStream` shares its node's DACL.
 
-The implementation registers an `OrderedFold` strategy for `WinNode`. The actual consumer-owned registration is exposed through one tested function:
+The implementation donates an `OrderedFold` plan for `WinNode` through the configured backend. The actual consumer-owned registration is exposed through one tested function:
 
 ```python
 from winfs.policy import register_winfs_policy
 
-register_winfs_policy(registry)
+register_winfs_policy(backend)
 ```
 
-The parent declaration is likewise explicit and bounded:
+`register_winfs_policy` donates through the dedicated OrderedFold method:
+
+```python
+backend.register_ordered_fold(
+    WinAce,
+    OrderedFold(
+        content=WinNode,
+        descriptor="security_descriptor",
+        source_descriptor="descriptor",
+        order="ace_order",
+        polarity=PolarityMap(
+            "ace_type",
+            allow_value="allow",
+            deny_value="deny",
+        ),
+        mask="access_mask",
+        trustee="trustee_sid",
+        token=FlatToken(
+            principal=WinPrincipal,
+            principal_user="user",
+            principal_identity="sid",
+            member=WinSidMember,
+            member_identity="member_sid",
+            member_group="group_sid__sid",
+        ),
+        domain=PERMISSION_DOMAIN,
+    ),
+)
+```
+
+The parent declaration is likewise explicit and bounded. It is not `register_relationship(..., along=)`:
 
 ```python
 from trusts.core import Along, Ref

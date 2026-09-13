@@ -6,14 +6,40 @@ from django.conf import settings
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 
-from trusts.core import Along, OrderedFold
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
+from trusts.core import (
+    Along,
+    BackendHandle,
+    FlatToken,
+    OrderedFold,
+    PlanQueryCompiler,
+    PolarityMap,
+    Ref,
+    TrustsConfigurationError,
+    TrustsRegistry,
+)
 
 from winfs import evaluate
 from winfs.constants import MAX_PARENT_DEPTH, R
 from winfs.evaluate import ERR_CONTEXT, access_check
 from winfs.fixtures import standard_tree
-from winfs.models import WinNode, WinStream
-from winfs.policy import INHERITANCE_WALK, MASK_ENTRIES, NODE_FOLD
+from winfs.models import (
+    WinAce,
+    WinNode,
+    WinPrincipal,
+    WinSecurityDescriptor,
+    WinSidMember,
+    WinStream,
+)
+from winfs.policy import (
+    INHERITANCE_WALK,
+    MASK_ENTRIES,
+    NODE_FOLD,
+    PERMISSION_DOMAIN,
+    register_winfs_policy,
+)
 
 from .support import PostgresTestCase
 
@@ -23,10 +49,13 @@ class CoreRegistrationTests(PostgresTestCase):
         super().setUp()
         self.data = standard_tree()
 
-    def _registry(self):
+    def _backend(self):
         from winfs.apps import winfs_config
 
-        return winfs_config().configured_backend().registry
+        return winfs_config().configured_backend()
+
+    def _registry(self):
+        return self._backend().registry
 
     def test_trusts_is_absent_from_installed_apps(self):
         self.assertNotIn("trusts", settings.INSTALLED_APPS)
@@ -40,7 +69,39 @@ class CoreRegistrationTests(PostgresTestCase):
         compiled = registry.plan_for(WinNode).strategy
         self.assertIsNotNone(compiled)
         self.assertIs(compiled.content_model, WinNode)
+        self.assertIs(compiled.source_model, WinAce)
         self.assertEqual(len(compiled.mask_rows), len(MASK_ENTRIES))
+        self.assertIs(compiled.policy_set_model, WinSecurityDescriptor)
+
+    def test_public_fold_uses_configured_backend_method_not_ref(self):
+        self.assertIsInstance(NODE_FOLD, OrderedFold)
+        self.assertIs(NODE_FOLD.content, WinNode)
+        self.assertEqual(NODE_FOLD.descriptor, "security_descriptor")
+        self.assertIsNone(NODE_FOLD.source)
+        self.assertEqual(NODE_FOLD.source_descriptor, "descriptor")
+        self.assertEqual(NODE_FOLD.order, "ace_order")
+        self.assertEqual(NODE_FOLD.mask, "access_mask")
+        self.assertEqual(NODE_FOLD.trustee, "trustee_sid")
+        self.assertIsInstance(NODE_FOLD.polarity, PolarityMap)
+        self.assertEqual(NODE_FOLD.polarity.field, "ace_type")
+        self.assertIsInstance(NODE_FOLD.token, FlatToken)
+        self.assertIs(NODE_FOLD.token.principal, WinPrincipal)
+        self.assertEqual(NODE_FOLD.token.principal_user, "user")
+        self.assertEqual(NODE_FOLD.token.principal_identity, "sid")
+        self.assertIs(NODE_FOLD.token.member, WinSidMember)
+        self.assertEqual(NODE_FOLD.token.member_identity, "member_sid")
+        self.assertEqual(NODE_FOLD.token.member_group, "group_sid__sid")
+        source = inspect.getsource(register_winfs_policy)
+        self.assertIn("backend.register_ordered_fold", source)
+        self.assertNotIn("register_strategy", source)
+        self.assertNotIn("backend.registry", source)
+        from winfs.apps import WinfsConfig
+
+        apps_source = inspect.getsource(WinfsConfig.ready)
+        self.assertIn("configured_backend", apps_source)
+        self.assertIn("register_winfs_policy(backend)", apps_source)
+        self.assertNotIn(".registry", apps_source)
+        self.assertNotIn("register_strategy", apps_source)
 
     def test_along_models_parent_bound_not_anypath_grant_walk(self):
         self.assertIsInstance(INHERITANCE_WALK, Along)
@@ -99,3 +160,126 @@ class CoreRegistrationTests(PostgresTestCase):
                 ).exists(),
                 codename,
             )
+
+    def test_startup_redonation_is_idempotent_and_zero_sql(self):
+        backend = self._backend()
+        before = backend.registry.strategies
+        with CaptureQueriesContext(connection) as captured:
+            register_winfs_policy(backend)
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertEqual(backend.registry.strategies, before)
+
+    def test_register_winfs_policy_rejects_bare_registry(self):
+        with self.assertRaises(TypeError):
+            register_winfs_policy(self._registry())
+
+
+def _isolated_backend():
+    return BackendHandle(
+        path="winfs.tests.isolated",
+        registry=TrustsRegistry(),
+        compiler=PlanQueryCompiler(),
+    )
+
+
+def _public_fold(**overrides):
+    fields = {
+        "content": WinNode,
+        "descriptor": "security_descriptor",
+        "source_descriptor": "descriptor",
+        "order": "ace_order",
+        "polarity": PolarityMap(
+            "ace_type",
+            allow_value="allow",
+            deny_value="deny",
+        ),
+        "mask": "access_mask",
+        "trustee": "trustee_sid",
+        "token": FlatToken(
+            principal=WinPrincipal,
+            principal_user="user",
+            principal_identity="sid",
+            member=WinSidMember,
+            member_identity="member_sid",
+            member_group="group_sid__sid",
+        ),
+        "domain": PERMISSION_DOMAIN,
+    }
+    fields.update(overrides)
+    return OrderedFold(**fields)
+
+
+class OrderedFoldDonationTests(PostgresTestCase):
+    def test_isolated_donation_is_zero_sql_and_convergent(self):
+        backend = _isolated_backend()
+        with CaptureQueriesContext(connection) as captured:
+            compiled = backend.register_ordered_fold(WinAce, NODE_FOLD)
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertIs(compiled.content_model, WinNode)
+        self.assertIs(compiled.source_model, WinAce)
+        self.assertIs(compiled.policy_set_model, WinSecurityDescriptor)
+        self.assertEqual(compiled.content_desc_attname, "security_descriptor_id")
+        self.assertEqual(compiled.source_desc_attname, "descriptor_id")
+        self.assertEqual(len(backend.registry.strategies), 1)
+
+    def test_duplicate_isolated_donation_is_zero_sql_and_unmutated(self):
+        backend = _isolated_backend()
+        first = backend.register_ordered_fold(WinAce, NODE_FOLD)
+        before = backend.registry.strategies
+        with CaptureQueriesContext(connection) as captured:
+            with self.assertRaises(TrustsConfigurationError) as ctx:
+                backend.register_ordered_fold(WinAce, _public_fold())
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertIn("Conflicting OrderedFold", str(ctx.exception))
+        self.assertEqual(backend.registry.strategies, before)
+        self.assertIs(backend.registry.strategies[0], first)
+
+    def test_ref_declaration_is_zero_sql_and_unmutated(self):
+        backend = _isolated_backend()
+        with CaptureQueriesContext(connection) as captured:
+            with self.assertRaises(TypeError):
+                backend.register_ordered_fold(
+                    WinAce,
+                    _public_fold(source_descriptor=Ref(WinAce).descriptor),
+                )
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertEqual(backend.registry.strategies, ())
+
+    def test_derived_source_field_is_zero_sql_and_unmutated(self):
+        backend = _isolated_backend()
+        with CaptureQueriesContext(connection) as captured:
+            with self.assertRaises(TrustsConfigurationError) as ctx:
+                backend.register_ordered_fold(
+                    WinAce,
+                    _public_fold(source=WinAce),
+                )
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertIn("source is derived", str(ctx.exception))
+        self.assertEqual(backend.registry.strategies, ())
+
+    def test_missing_source_descriptor_is_zero_sql_and_unmutated(self):
+        backend = _isolated_backend()
+        with CaptureQueriesContext(connection) as captured:
+            with self.assertRaises((TypeError, TrustsConfigurationError)):
+                backend.register_ordered_fold(
+                    WinAce,
+                    _public_fold(source_descriptor=None),
+                )
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertEqual(backend.registry.strategies, ())
+
+    def test_frozen_backend_rejects_before_mutation(self):
+        backend = self._live_backend()
+        before = backend.registry.strategies
+        with CaptureQueriesContext(connection) as captured:
+            with self.assertRaises(TrustsConfigurationError) as ctx:
+                backend.register_ordered_fold(WinAce, NODE_FOLD)
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertIn("frozen", str(ctx.exception).lower())
+        self.assertEqual(backend.registry.strategies, before)
+
+    def _live_backend(self):
+        from winfs.apps import winfs_config
+
+        return winfs_config().configured_backend()
+

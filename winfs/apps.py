@@ -47,10 +47,8 @@ class WinfsConfig(TrustsImplementationConfig):
             CANONICAL_BACKEND,
             apps_registry=getattr(self, "apps", None),
         )
-        registry = owner.configured_backend(CANONICAL_BACKEND).registry
-        if getattr(self, "_winfs_policy_registry_id", None) is not registry:
-            register_winfs_policy(registry)
-            self._winfs_policy_registry_id = registry
+        backend = owner.configured_backend(CANONICAL_BACKEND)
+        register_winfs_policy(backend)
         from django.db.models.signals import post_migrate
 
         post_migrate.connect(

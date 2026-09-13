@@ -8,6 +8,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from winfs.compat import (
+    CORE_PIN,
     CORE_REQUIREMENT,
     FLOOR_MESSAGE,
     require_final_core,
@@ -52,13 +53,36 @@ class IncompatibleCoreTests(SimpleTestCase):
     def test_floor_message_names_final_core(self):
         self.assertIn("TrustsImplementationConfig", FLOOR_MESSAGE)
         self.assertIn("OrderedFold", FLOOR_MESSAGE)
+        self.assertIn("register_ordered_fold", FLOOR_MESSAGE)
         self.assertIn("1.0.0.dev3", FLOOR_MESSAGE)
+        self.assertIn(CORE_PIN, FLOOR_MESSAGE)
+
+    def test_c_methods_pair_pin(self):
+        self.assertEqual(
+            CORE_PIN,
+            "f5211c11047eb6810680f5d1b13bf34b2c376635",
+        )
+        names = require_final_core()
+        self.assertTrue(hasattr(names["BackendHandle"], "register_ordered_fold"))
+
+    def test_missing_register_ordered_fold_raises(self):
+        from trusts.core import BackendHandle
+
+        original = BackendHandle.register_ordered_fold
+        delattr(BackendHandle, "register_ordered_fold")
+        try:
+            with self.assertRaises(ImproperlyConfigured) as ctx:
+                require_final_core()
+            self.assertIn(CORE_REQUIREMENT, str(ctx.exception))
+        finally:
+            BackendHandle.register_ordered_fold = original
 
     def test_final_core_imports(self):
         names = require_final_core()
         self.assertIn("TrustsImplementationConfig", names)
         self.assertIn("OrderedFold", names)
         self.assertIn("Along", names)
+        self.assertIn("BackendHandle", names)
 
     def test_license_copyright_year_is_2026(self):
         from pathlib import Path

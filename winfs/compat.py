@@ -3,10 +3,11 @@
 from django.core.exceptions import ImproperlyConfigured
 
 CORE_REQUIREMENT = "django-trusts>=1.0.0.dev3,<2"
-CORE_PIN = "1e19b5d464c067186aada58943c3ee67c44b2aa0"
+CORE_PIN = "f5211c11047eb6810680f5d1b13bf34b2c376635"
 FLOOR_MESSAGE = (
     "django-trusts-windows-acl requires %s "
-    "(TrustsImplementationConfig, OrderedFold, Along; core merge %s). "
+    "(TrustsImplementationConfig, OrderedFold, "
+    "backend.register_ordered_fold; core merge %s). "
     "Upgrade django-trusts; do not rely on a missing import."
     % (CORE_REQUIREMENT, CORE_PIN)
 )
@@ -19,11 +20,12 @@ def require_final_core():
     (its mixin body calls ``get_permission_model()``).
 
     Transitional ``KernelConfig`` and the removed ``trusts.context``
-    contract are incompatible.
+    contract are incompatible. The C-methods pin must expose
+    ``BackendHandle.register_ordered_fold``.
     """
     try:
         from trusts.apps import TrustsImplementationConfig
-        from trusts.core import Along, FlatToken, OrderedFold, Ref
+        from trusts.core import Along, BackendHandle, FlatToken, OrderedFold, Ref
     except ImportError as exc:
         raise ImproperlyConfigured(FLOOR_MESSAGE) from exc
 
@@ -43,8 +45,11 @@ def require_final_core():
             "django-trusts-windows-acl refuses trusts.context; %s."
             % CORE_REQUIREMENT
         )
+    if not hasattr(BackendHandle, "register_ordered_fold"):
+        raise ImproperlyConfigured(FLOOR_MESSAGE)
     return {
         "Along": Along,
+        "BackendHandle": BackendHandle,
         "FlatToken": FlatToken,
         "OrderedFold": OrderedFold,
         "Ref": Ref,

@@ -1,7 +1,8 @@
 # Bounded Windows filesystem ACL (django-trusts#17)
 
 Revision **`bounded-winfs-acl-r3`** plus the approved depth erratum,
-converted to final django-trusts core (`1.0.0.dev3`, merge `1e19b5d`).
+converted to final django-trusts core (`1.0.0.dev3`, C-methods merge
+`f5211c11`).
 Implementation lives in this repository. django-trusts core is unchanged.
 
 Vectors in `winfs.tests.test_matrix` are **documentation-derived** from

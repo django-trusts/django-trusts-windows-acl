@@ -4,10 +4,10 @@ Copyable spellings below are the live settings / registration / AccessCheck
 surface. Chat owns README prose; this module only freezes the verified
 names so later user-facing examples can be copied, not invented.
 
-``WinNode.objects.authorized`` is installed (AuthorizedManager) but is
-not the AccessCheck listing surface: inheritance and owner pre-grant
-live in the consumer SQL used by ``access_check`` / ``authorized_pks`` /
-``authorized_nodes``.
+``WinNode.objects.authorized`` is the OrderedFold family-local
+``AuthorizedManager``. It is not the AccessCheck listing surface:
+inheritance and owner pre-grant live in the consumer SQL used by
+``access_check`` / ``authorized_pks`` / ``authorized_nodes``.
 """
 
 from pathlib import Path
@@ -18,7 +18,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from trusts.core import Along, FlatToken, OrderedFold
+from trusts.core import Along
+from trusts_ordered_fold import FlatToken, OrderedFold
 
 from winfs.constants import MAX_PARENT_DEPTH, R, RC, WD
 from winfs.evaluate import access_check, authorized_nodes, authorized_pks
@@ -41,11 +42,11 @@ COPYABLE_AUTHENTICATION_BACKENDS = [
 
 # --- Copyable registration (live ``winfs.policy``) ---
 #
-# backend.register_ordered_fold(WinAce, NODE_FOLD)
+# register_ordered_fold(backend, WinAce, NODE_FOLD)
 # register_winfs_policy(backend)
 # INHERITANCE_WALK = Along(Ref(WinNode).parent, bound=64)
-# Along is not register_relationship(along=) and is not AnyPath
-# grant-reachability.
+# Along is not register_relationship(along=) and is not a
+# relationship grant-walk on this OrderedFold path.
 
 # --- Copyable authorization surface ---
 #
@@ -101,6 +102,7 @@ class ReadmeProofTests(FixtureMixin, PostgresTestCase):
 
     def test_copyable_ordered_fold_and_consumer_along(self):
         self.assertIsInstance(NODE_FOLD, OrderedFold)
+        self.assertEqual(NODE_FOLD.__class__.__module__, "trusts_ordered_fold")
         self.assertIs(NODE_FOLD.content, WinNode)
         self.assertEqual(NODE_FOLD.descriptor, "security_descriptor")
         self.assertIsNone(NODE_FOLD.source)
@@ -198,6 +200,21 @@ class ReadmeProofTests(FixtureMixin, PostgresTestCase):
             list(WinNode.objects.authorized(self.alice, self._read_perm())),
         )
 
+    def test_explicit_dacl_uses_ordered_fold_authorized_manager(self):
+        from trusts_ordered_fold import AuthorizedManager
+
+        allow(self.notes, self.data["alice"], R)
+        self.assertIsInstance(WinNode.objects, AuthorizedManager)
+        self.assertTrue(
+            self._registry().has_permission(
+                self.alice, self.notes, self._read_perm()
+            )
+        )
+        self.assertIn(
+            self.notes,
+            list(WinNode.objects.authorized(self.alice, self._read_perm())),
+        )
+
     def test_owner_pregrant_is_rc_wd_not_full_control(self):
         self.assertTrue(access_check(self.alice, self.notes, RC).allowed)
         self.assertTrue(access_check(self.alice, self.notes, WD).allowed)
@@ -234,6 +251,10 @@ class ReadmePackageProofTests(PostgresTestCase):
         self.assertIn('requires-python = ">=3.12"', pyproject)
         self.assertIn('"Django>=6.1,<6.2"', pyproject)
         self.assertIn('"django-trusts>=1.0.0.dev3,<2"', pyproject)
+        self.assertIn(
+            '"django-trusts-ordered-fold>=1.0.0.dev0,<2"',
+            pyproject,
+        )
 
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         dev = (ROOT / "DEV.md").read_text(encoding="utf-8")
@@ -243,7 +264,10 @@ class ReadmePackageProofTests(PostgresTestCase):
         )
         self.assertIn("winfs.apps.WinfsConfig", readme)
         self.assertIn("winfs.backends.WinfsBackend", readme)
-        self.assertIn("backend.register_ordered_fold(", readme)
+        self.assertIn("register_ordered_fold(", readme)
+        self.assertNotIn("backend.register_ordered_fold(", readme)
+        self.assertIn("from trusts_ordered_fold import", readme)
+        self.assertIn("TrustsOrderedFoldModelBackend", readme)
         self.assertIn("register_winfs_policy(backend)", readme)
         self.assertIn("access_check(request.user, node, R)", readme)
         self.assertIn("authorized_nodes(", readme)
@@ -251,6 +275,10 @@ class ReadmePackageProofTests(PostgresTestCase):
         self.assertNotIn("bounded-winfs-acl-r3", readme)
         self.assertNotIn("register_strategy", readme)
         self.assertNotIn("registry.register", readme)
+        self.assertNotIn(
+            "trusts_ordered_fold.backends.TrustsOrderedFoldModelBackend",
+            readme,
+        )
         for stale_sha in (
             "1e19b5d464c067186aada58943c3ee67c44b2aa0",
             "6cf12d990c65e20dc862ed1dd1db8f8ec4f874be",
@@ -259,14 +287,23 @@ class ReadmePackageProofTests(PostgresTestCase):
             self.assertNotIn(stale_sha, readme)
         requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
         self.assertIn(
-            "f5211c11047eb6810680f5d1b13bf34b2c376635",
+            "6934894489d4fc0e46de88b55b9a27f5f2eb2b41",
+            requirements,
+        )
+        self.assertIn(
+            "c8c649aa5278db2b11fc380fa1646ae73df471ac",
             requirements,
         )
         self.assertNotIn(
             "1e19b5d464c067186aada58943c3ee67c44b2aa0",
             requirements,
         )
+        self.assertNotIn(
+            "f5211c11047eb6810680f5d1b13bf34b2c376635",
+            requirements,
+        )
         migrates = (ROOT / "migrates.md").read_text(encoding="utf-8")
+        self.assertIn("register_ordered_fold(backend, WinAce, NODE_FOLD)", migrates)
         self.assertIn("backend.register_ordered_fold(", migrates)
         self.assertIn("register_winfs_policy(backend)", migrates)
         self.assertIn(".registry", migrates)
@@ -276,6 +313,9 @@ class ReadmePackageProofTests(PostgresTestCase):
         self.assertIn("1e19b5d464c067186aada58943c3ee67c44b2aa0", migrates)
         self.assertIn("6cf12d990c65e20dc862ed1dd1db8f8ec4f874be", migrates)
         self.assertIn("f5211c11047eb6810680f5d1b13bf34b2c376635", migrates)
+        self.assertIn("6934894489d4fc0e46de88b55b9a27f5f2eb2b41", migrates)
+        self.assertIn("c8c649aa5278db2b11fc380fa1646ae73df471ac", migrates)
+        self.assertIn("TrustsOrderedFoldModelBackend", migrates)
         self.assertIn("register_winfs_policy(", migrates)
         self.assertIn("Internal development record", dev)
         self.assertIn(

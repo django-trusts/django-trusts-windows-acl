@@ -1,9 +1,12 @@
-"""Final-core registration: OrderedFold on WinNode, Along as the parent bound.
+"""OrderedFold registration on WinNode; Along as the parent-walk bound.
 
-Donate through the configured backend's dedicated OrderedFold method.
-Along is not passed to ``register_relationship(..., along=)``. AnyPath
-and OrderedFold cannot share one content terminal, and the Along
-grant-reachability renderer is SQLite-only. Windows ACE inheritance
+Donate through the extension-owned ``register_ordered_fold`` onto the
+configured ``WinfsBackend`` handle. Do not call Core
+``BackendHandle.register_ordered_fold`` or construct public ``Ref``
+fields on the OrderedFold declaration.
+
+Along is not passed to ``register_relationship(..., along=)``. This
+path does not register a relationship plan. Windows ACE inheritance
 (OI/CI/NP/IO, protected, IO-only) is not grant-on-ancestor
 reachability. The consumer ancestor CTE uses ``INHERITANCE_WALK.bound``
 (64) as the parent-link cap.
@@ -11,7 +14,7 @@ reachability. The consumer ancestor CTE uses ``INHERITANCE_WALK.bound``
 
 from django.contrib.auth.models import Permission
 
-from winfs.compat import require_final_core
+from winfs.compat import require_ordered_fold
 from winfs.constants import (
     LIST,
     MAX_PARENT_DEPTH,
@@ -22,14 +25,16 @@ from winfs.constants import (
     X,
 )
 
-_core = require_final_core()
+_core = require_ordered_fold()
 Along = _core["Along"]
-BackendHandle = _core["BackendHandle"]
 FlatToken = _core["FlatToken"]
+MaskEntry = _core["MaskEntry"]
 OrderedFold = _core["OrderedFold"]
+OrderedFoldBackendHandle = _core["OrderedFoldBackendHandle"]
+PermissionMaskDomain = _core["PermissionMaskDomain"]
+PolarityMap = _core["PolarityMap"]
 Ref = _core["Ref"]
-
-from trusts.core import MaskEntry, PermissionMaskDomain, PolarityMap
+register_ordered_fold = _core["register_ordered_fold"]
 
 from winfs.models import WinAce, WinNode, WinPrincipal, WinSidMember
 
@@ -47,7 +52,7 @@ MASK_ENTRIES = (
 
 PERMISSION_DOMAIN = PermissionMaskDomain(Permission, MASK_ENTRIES)
 
-# Typed bound for the consumer parent walk. Not an AnyPath along=.
+# Typed bound for the consumer parent walk. Not a relationship along=.
 INHERITANCE_WALK = Along(Ref(WinNode).parent, bound=MAX_PARENT_DEPTH)
 
 NODE_FOLD = OrderedFold(
@@ -74,8 +79,8 @@ NODE_FOLD = OrderedFold(
 )
 
 # Public configured-backend identity for repeated startup donation.
-# BackendHandle equality is (path, registry, compiler), so a swapped
-# store re-donates and the same configured backend does not.
+# OrderedFoldBackendHandle equality is (path, registry, compiler), so a
+# swapped store re-donates and the same configured backend does not.
 _donated_backends = set()
 
 _CODE_TO_MASK = {
@@ -103,19 +108,20 @@ def ensure_domain_permissions():
 
 
 def register_winfs_policy(backend):
-    """Donate the WinNode OrderedFold plan through the configured backend.
+    """Donate the WinNode OrderedFold plan through the extension registry.
 
     Idempotent on the same configured-backend identity. Does not inspect
-    private registry state for donation or idempotency.
+    private registry state for donation or idempotency. Does not call
+    Core ``BackendHandle.register_ordered_fold``.
     """
-    if not isinstance(backend, BackendHandle):
+    if not isinstance(backend, OrderedFoldBackendHandle):
         raise TypeError(
-            "register_winfs_policy requires a configured backend, not %r."
-            % (type(backend).__name__,)
+            "register_winfs_policy requires an OrderedFold backend "
+            "handle, not %r." % (type(backend).__name__,)
         )
     if backend in _donated_backends:
         return
-    backend.register_ordered_fold(WinAce, NODE_FOLD)
+    register_ordered_fold(backend, WinAce, NODE_FOLD)
     _donated_backends.add(backend)
 
 

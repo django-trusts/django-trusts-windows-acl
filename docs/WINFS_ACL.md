@@ -1,9 +1,10 @@
 # Bounded Windows filesystem ACL (django-trusts#17)
 
 Revision **`bounded-winfs-acl-r3`** plus the approved depth erratum,
-converted to final django-trusts core (`1.0.0.dev3`, C-methods merge
-`f5211c11`).
-Implementation lives in this repository. django-trusts core is unchanged.
+cut over to OrderedFold P2 (`c8c649aa5278db2b11fc380fa1646ae73df471ac`)
+on Core C1 (`6934894489d4fc0e46de88b55b9a27f5f2eb2b41`).
+Implementation lives in this repository. Windows authorization
+semantics are unchanged.
 
 Vectors in `winfs.tests.test_matrix` are **documentation-derived** from
 Microsoft AccessCheck / ACE inheritance / MS-DTYP sources cited on
@@ -14,14 +15,15 @@ must stay tagged separately from `microsoft-docs` expectations.
 
 ## What this proves
 
-Final core primitives can express the bounded Windows model without
-weakening the fixed-query or fail-closed guarantees:
+The OrderedFold package plus Core relationship plumbing can express the
+bounded Windows model without weakening the fixed-query or fail-closed
+guarantees:
 
-- `OrderedFold` evaluates stored-order allow/deny remaining-bits on
-  `WinAce` (not deny-wins).
+- `OrderedFold` (imported from `trusts_ordered_fold`) evaluates
+  stored-order allow/deny remaining-bits on `WinAce` (not deny-wins).
 - `Along(Ref(WinNode).parent, bound=64)` is the typed parent-link cap.
   Live inheritance still uses the consumer CTE: Along is not registered
-  as AnyPath grant-reachability on PostgreSQL.
+  as a relationship grant-walk on this OrderedFold path.
 - Object decision, authorized listing, and enumerate-then-paginate each
   remain one PostgreSQL statement.
 

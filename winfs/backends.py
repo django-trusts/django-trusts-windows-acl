@@ -1,17 +1,20 @@
-"""Configured Trusts mixin backend. Login stays on Django ModelBackend."""
+"""Configured OrderedFold backend. Login stays on Django ModelBackend."""
 
-from django.contrib.auth.backends import ModelBackend
+from winfs.compat import require_ordered_fold_backend
 
-from winfs.compat import require_final_core_backend
-
-_core = require_final_core_backend()
-TrustModelBackendMixin = _core["TrustModelBackendMixin"]
+_core = require_ordered_fold_backend()
+TrustsOrderedFoldModelBackend = _core["TrustsOrderedFoldModelBackend"]
 
 CANONICAL_BACKEND = "winfs.backends.WinfsBackend"
 
 
-class WinfsBackend(TrustModelBackendMixin, ModelBackend):
+class WinfsBackend(TrustsOrderedFoldModelBackend):
     """Object authorization host for the Windows OrderedFold plan.
+
+    ``TrustsOrderedFoldModelBackend`` is already the concrete Django
+    ``ModelBackend``. Do not inherit ``ModelBackend`` again and do not
+    list the generic OrderedFold backend as a second
+    ``AUTHENTICATION_BACKENDS`` path.
 
     ``has_perm`` on a ``WinNode`` / ``WinStream`` uses the consumer
     AccessCheck (inheritance, owner pre-grant, fail-closed gates) so the

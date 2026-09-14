@@ -9,16 +9,15 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from trusts.core import (
-    Along,
-    BackendHandle,
+from trusts.core import Along, Ref, TrustsConfigurationError
+from trusts_ordered_fold import (
     FlatToken,
     OrderedFold,
-    PlanQueryCompiler,
+    OrderedFoldBackendHandle,
+    OrderedFoldQueryCompiler,
+    OrderedFoldRegistry,
     PolarityMap,
-    Ref,
-    TrustsConfigurationError,
-    TrustsRegistry,
+    register_ordered_fold,
 )
 
 from winfs import evaluate
@@ -62,7 +61,10 @@ class CoreRegistrationTests(PostgresTestCase):
         self.assertNotIn("trusts.apps.KernelConfig", settings.INSTALLED_APPS)
 
     def test_ordered_fold_is_registered_on_winnode(self):
-        registry = self._registry()
+        backend = self._backend()
+        self.assertIsInstance(backend, OrderedFoldBackendHandle)
+        registry = backend.registry
+        self.assertIsInstance(registry, OrderedFoldRegistry)
         self.assertTrue(registry.frozen)
         self.assertEqual(len(registry.strategies), 1)
         self.assertEqual(registry.records, ())
@@ -73,8 +75,36 @@ class CoreRegistrationTests(PostgresTestCase):
         self.assertEqual(len(compiled.mask_rows), len(MASK_ENTRIES))
         self.assertIs(compiled.policy_set_model, WinSecurityDescriptor)
 
+    def test_single_configured_path_is_winfs_backend(self):
+        from django.conf import settings
+
+        from trusts_ordered_fold.backends import TrustsOrderedFoldModelBackend
+        from winfs.apps import WinfsConfig
+        from winfs.backends import WinfsBackend
+
+        self.assertEqual(
+            WinfsConfig.trusts_backend_paths,
+            ("winfs.backends.WinfsBackend",),
+        )
+        self.assertEqual(
+            list(settings.AUTHENTICATION_BACKENDS),
+            [
+                "django.contrib.auth.backends.ModelBackend",
+                "winfs.backends.WinfsBackend",
+            ],
+        )
+        self.assertNotIn(
+            "trusts_ordered_fold.backends.TrustsOrderedFoldModelBackend",
+            settings.AUTHENTICATION_BACKENDS,
+        )
+        self.assertTrue(issubclass(WinfsBackend, TrustsOrderedFoldModelBackend))
+        from trusts_ordered_fold import OrderedFoldImplementationConfig
+
+        self.assertTrue(issubclass(WinfsConfig, OrderedFoldImplementationConfig))
+
     def test_public_fold_uses_configured_backend_method_not_ref(self):
         self.assertIsInstance(NODE_FOLD, OrderedFold)
+        self.assertEqual(NODE_FOLD.__class__.__module__, "trusts_ordered_fold")
         self.assertIs(NODE_FOLD.content, WinNode)
         self.assertEqual(NODE_FOLD.descriptor, "security_descriptor")
         self.assertIsNone(NODE_FOLD.source)
@@ -92,11 +122,15 @@ class CoreRegistrationTests(PostgresTestCase):
         self.assertEqual(NODE_FOLD.token.member_identity, "member_sid")
         self.assertEqual(NODE_FOLD.token.member_group, "group_sid__sid")
         source = inspect.getsource(register_winfs_policy)
-        self.assertIn("backend.register_ordered_fold", source)
+        self.assertIn("register_ordered_fold(backend, WinAce, NODE_FOLD)", source)
+        self.assertNotIn("backend.register_ordered_fold", source)
         self.assertNotIn("register_strategy", source)
         self.assertNotIn("backend.registry", source)
+        from winfs import policy as policy_mod
         from winfs.apps import WinfsConfig
 
+        self.assertNotIn("from trusts.core import MaskEntry", inspect.getsource(policy_mod))
+        self.assertNotIn("from trusts.core import OrderedFold", inspect.getsource(policy_mod))
         apps_source = inspect.getsource(WinfsConfig.ready)
         self.assertIn("configured_backend", apps_source)
         self.assertIn("register_winfs_policy(backend)", apps_source)
@@ -175,10 +209,10 @@ class CoreRegistrationTests(PostgresTestCase):
 
 
 def _isolated_backend():
-    return BackendHandle(
+    return OrderedFoldBackendHandle(
         path="winfs.tests.isolated",
-        registry=TrustsRegistry(),
-        compiler=PlanQueryCompiler(),
+        registry=OrderedFoldRegistry(),
+        compiler=OrderedFoldQueryCompiler(),
     )
 
 
@@ -213,7 +247,7 @@ class OrderedFoldDonationTests(PostgresTestCase):
     def test_isolated_donation_is_zero_sql_and_convergent(self):
         backend = _isolated_backend()
         with CaptureQueriesContext(connection) as captured:
-            compiled = backend.register_ordered_fold(WinAce, NODE_FOLD)
+            compiled = register_ordered_fold(backend, WinAce, NODE_FOLD)
         self.assertEqual(len(captured.captured_queries), 0)
         self.assertIs(compiled.content_model, WinNode)
         self.assertIs(compiled.source_model, WinAce)
@@ -224,11 +258,11 @@ class OrderedFoldDonationTests(PostgresTestCase):
 
     def test_duplicate_isolated_donation_is_zero_sql_and_unmutated(self):
         backend = _isolated_backend()
-        first = backend.register_ordered_fold(WinAce, NODE_FOLD)
+        first = register_ordered_fold(backend, WinAce, NODE_FOLD)
         before = backend.registry.strategies
         with CaptureQueriesContext(connection) as captured:
             with self.assertRaises(TrustsConfigurationError) as ctx:
-                backend.register_ordered_fold(WinAce, _public_fold())
+                register_ordered_fold(backend, WinAce, _public_fold())
         self.assertEqual(len(captured.captured_queries), 0)
         self.assertIn("Conflicting OrderedFold", str(ctx.exception))
         self.assertEqual(backend.registry.strategies, before)
@@ -238,7 +272,8 @@ class OrderedFoldDonationTests(PostgresTestCase):
         backend = _isolated_backend()
         with CaptureQueriesContext(connection) as captured:
             with self.assertRaises(TypeError):
-                backend.register_ordered_fold(
+                register_ordered_fold(
+                    backend,
                     WinAce,
                     _public_fold(source_descriptor=Ref(WinAce).descriptor),
                 )
@@ -249,7 +284,8 @@ class OrderedFoldDonationTests(PostgresTestCase):
         backend = _isolated_backend()
         with CaptureQueriesContext(connection) as captured:
             with self.assertRaises(TrustsConfigurationError) as ctx:
-                backend.register_ordered_fold(
+                register_ordered_fold(
+                    backend,
                     WinAce,
                     _public_fold(source=WinAce),
                 )
@@ -261,7 +297,8 @@ class OrderedFoldDonationTests(PostgresTestCase):
         backend = _isolated_backend()
         with CaptureQueriesContext(connection) as captured:
             with self.assertRaises((TypeError, TrustsConfigurationError)):
-                backend.register_ordered_fold(
+                register_ordered_fold(
+                    backend,
                     WinAce,
                     _public_fold(source_descriptor=None),
                 )
@@ -273,7 +310,7 @@ class OrderedFoldDonationTests(PostgresTestCase):
         before = backend.registry.strategies
         with CaptureQueriesContext(connection) as captured:
             with self.assertRaises(TrustsConfigurationError) as ctx:
-                backend.register_ordered_fold(WinAce, NODE_FOLD)
+                register_ordered_fold(backend, WinAce, NODE_FOLD)
         self.assertEqual(len(captured.captured_queries), 0)
         self.assertIn("frozen", str(ctx.exception).lower())
         self.assertEqual(backend.registry.strategies, before)

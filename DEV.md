@@ -7,21 +7,28 @@
 
 django-trusts-windows-acl is a bounded relational implementation of Windows filesystem DACL semantics for Django. It models SIDs, local groups, security descriptors, ownership, ordered allow/deny ACEs, and inherited permissions, with object checks and authorized listings evaluated in fixed SQL queries.
 
-The project validates final django-trusts core (`OrderedFold`, `Along`,
-`TrustsImplementationConfig`) while keeping Windows-specific policy data
-and evaluation on this consumer. It is a reference implementation—not a
-complete replacement for Windows AccessCheck—and explicitly fails closed
-for unsupported Windows security features.
+The project validates django-trusts Core C1 plus
+django-trusts-ordered-fold P2 (`OrderedFold`,
+`TrustsOrderedFoldModelBackend`, `Along`,
+`OrderedFoldImplementationConfig`) while keeping Windows-specific
+policy data and evaluation on this consumer. It is a reference
+implementation—not a complete replacement for Windows AccessCheck—and
+explicitly fails closed for unsupported Windows security features.
 
 This is the implementation repository for the Windows ACL validation on
 [django-trusts#17](https://github.com/django-trusts/django-trusts/issues/17)
-(`bounded-winfs-acl-r3` on final core). django-trusts core is not modified.
+(`bounded-winfs-acl-r3` on the OrderedFold package). django-trusts
+core is not modified.
 
 It depends on
 [django-trusts](https://github.com/django-trusts/django-trusts)
 **`>=1.0.0.dev3,<2`** at revision
-[`f5211c11047eb6810680f5d1b13bf34b2c376635`](https://github.com/django-trusts/django-trusts/commit/f5211c11047eb6810680f5d1b13bf34b2c376635).
-Do not list `'trusts'` in `INSTALLED_APPS`.
+[`6934894489d4fc0e46de88b55b9a27f5f2eb2b41`](https://github.com/django-trusts/django-trusts/commit/6934894489d4fc0e46de88b55b9a27f5f2eb2b41)
+and
+[django-trusts-ordered-fold](https://github.com/django-trusts/django-trusts-ordered-fold)
+at
+[`c8c649aa5278db2b11fc380fa1646ae73df471ac`](https://github.com/django-trusts/django-trusts-ordered-fold/commit/c8c649aa5278db2b11fc380fa1646ae73df471ac).
+Do not list `'trusts'` or `'trusts_ordered_fold'` in `INSTALLED_APPS`.
 
 Requires **Python ≥ 3.12** and **PostgreSQL 14+**.
 
@@ -64,9 +71,10 @@ python manage.py check
 python manage.py test winfs
 ```
 
-`manage.py check` must stay clean of `trusts.E001` / `trusts.E002`.
-This project does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
-PostgreSQL is required for OrderedFold evaluate.
+`manage.py check` must stay clean of `trusts.E001` / `trusts.E002` /
+`trusts_ordered_fold.E001`. This project does not set
+`TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`. PostgreSQL is required for
+OrderedFold evaluate.
 
 The suite covers the V1–V43 matrix, depths 63/64/65, V38′, cycles,
 group ownership, query-count, and inspected plans (shallow, depth-8,
@@ -88,7 +96,7 @@ against a Windows host.
 ## What Trusts is used for
 
 ```python
-backend.register_ordered_fold(WinAce, OrderedFold(...))  # WinNode remaining-bits
+register_ordered_fold(backend, WinAce, OrderedFold(...))  # WinNode remaining-bits
 Along(Ref(WinNode).parent, bound=64)                      # parent-link cap only
 ```
 
@@ -98,6 +106,7 @@ Django `Group`, or `Context` is on the evaluator path. See
 
 ## Trusts dependency
 
-`requirements.txt` installs Trusts from the git SHA above. Package
-metadata on that revision is `1.0.0.dev3`. The declared constraint is
-`django-trusts>=1.0.0.dev3,<2`.
+`requirements.txt` installs Core and OrderedFold from the git SHAs
+above. Package metadata on the Core revision is `1.0.0.dev3`. The
+declared constraints are `django-trusts>=1.0.0.dev3,<2` and
+`django-trusts-ordered-fold>=1.0.0.dev0,<2`.

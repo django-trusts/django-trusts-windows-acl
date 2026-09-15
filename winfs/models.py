@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from trusts.query import AuthorizedManager
+from trusts_ordered_fold import AuthorizedManager  # fold-family; not Core
 
 from .constants import (
     ACE_ALLOW,

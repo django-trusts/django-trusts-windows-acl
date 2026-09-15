@@ -4,8 +4,9 @@ Token expansion matches the registered FlatToken (win_principal +
 win_sid_member). Ordered ACE evaluation matches OrderedFold remaining-bits.
 The ancestor walk uses Along.bound (MAX_PARENT_DEPTH = 64). Inheritance
 flags, owner pre-grant, OWNER_RIGHTS, and depth/cycle gates stay
-consumer-owned: Along is SQLite grant-reachability and cannot share the
-WinNode OrderedFold terminal.
+consumer-owned. This path does not register a relationship plan; Along
+is the parent-link cap for the consumer CTE, not grant-on-ancestor
+reachability.
 """
 
 from dataclasses import dataclass

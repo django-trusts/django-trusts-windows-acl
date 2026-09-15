@@ -27,7 +27,7 @@ python manage.py runserver
 
 Open <http://127.0.0.1:8000/winfs/> and sign in as `alice`, `bob`, `carol`, or `admin`; the seeded password is `demo`.
 
-The package requires Python 3.12 or newer, Django 6.1, django-trusts 1.x, and PostgreSQL 14 or newer. CI runs on PostgreSQL 16.
+The package requires Python 3.12 or newer, Django 6.1, django-trusts 1.x, django-trusts-ordered-fold, and PostgreSQL 14 or newer. CI runs on PostgreSQL 16.
 
 ## Configure Django
 
@@ -50,7 +50,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 ```
 
-`WinfsConfig` owns and registers the Windows policy. `django-trusts` is used as a Python library, so it is not a separate installed app. Django's `ModelBackend` continues to handle login and model-level permissions; `WinfsBackend` handles object permissions for `WinNode` and `WinStream`.
+`WinfsConfig` owns and registers the Windows policy. `django-trusts` and `django-trusts-ordered-fold` are Python libraries, so they are not separate installed apps. Django's `ModelBackend` continues to handle login and model-level permissions. `WinfsBackend` subclasses `TrustsOrderedFoldModelBackend` and is the sole Trusts path; it handles object permissions for `WinNode` and `WinStream`. Do not also list the generic OrderedFold backend.
 
 ## Persist policy as data
 
@@ -70,10 +70,18 @@ from winfs.policy import register_winfs_policy
 register_winfs_policy(backend)
 ```
 
-`register_winfs_policy` donates through the dedicated OrderedFold method:
+`register_winfs_policy` donates through the extension-owned OrderedFold function:
 
 ```python
-backend.register_ordered_fold(
+from trusts_ordered_fold import (
+    FlatToken,
+    OrderedFold,
+    PolarityMap,
+    register_ordered_fold,
+)
+
+register_ordered_fold(
+    backend,
     WinAce,
     OrderedFold(
         content=WinNode,
@@ -148,6 +156,7 @@ Not implemented: SACL/auditing, conditional ACEs, privileges, nested-group expan
 ## Project family and further reading
 
 - [django-trusts](https://github.com/django-trusts/django-trusts): the declarative relational-authorization core.
+- [django-trusts-ordered-fold](https://github.com/django-trusts/django-trusts-ordered-fold): the PostgreSQL OrderedFold engine and `TrustsOrderedFoldModelBackend`.
 - [django-trusts-gh-permissions](https://github.com/django-trusts/django-trusts-gh-permissions): permissions implied by organization and team relationships.
 - [django-trusts-zero](https://github.com/django-trusts/django-trusts-zero): the concrete continuation and migration path for django-trusts 0.x.
 - [Windows ACL model and proof notes](docs/WINFS_ACL.md)

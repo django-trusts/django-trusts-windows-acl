@@ -1,9 +1,9 @@
 from django.core.exceptions import ImproperlyConfigured
 
-from winfs.compat import require_final_core
+from winfs.compat import require_ordered_fold
 
-_core = require_final_core()
-TrustsImplementationConfig = _core["TrustsImplementationConfig"]
+_core = require_ordered_fold()
+OrderedFoldImplementationConfig = _core["OrderedFoldImplementationConfig"]
 
 CANONICAL_BACKEND = "winfs.backends.WinfsBackend"
 
@@ -27,8 +27,12 @@ def winfs_config(apps_registry=None):
     )
 
 
-class WinfsConfig(TrustsImplementationConfig):
-    """Windows ACL implementation owner. Core is a library, not an app."""
+class WinfsConfig(OrderedFoldImplementationConfig):
+    """Windows ACL implementation owner. Core is a library, not an app.
+
+    Owns exactly one configured path: ``winfs.backends.WinfsBackend``.
+    The generic OrderedFold backend is not a second listed path.
+    """
 
     default_auto_field = "django.db.models.AutoField"
     name = "winfs"

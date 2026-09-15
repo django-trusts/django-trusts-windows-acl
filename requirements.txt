@@ -1,7 +1,9 @@
 # Python >=3.12, Django 6.1.x — matches django-trusts 1.0.0.dev3.
-# Constraint is django-trusts>=1.0.0.dev3,<2. That range is not on PyPI
-# yet; install the C-methods core merge first (or use a companion wheel).
+# Constraint is django-trusts>=1.0.0.dev3,<2 plus
+# django-trusts-ordered-fold>=1.0.0.dev0,<2. Those ranges are not on
+# PyPI yet; install the C1 and P2 pins first (or use companion wheels).
 Django>=6.1,<6.2
-django-trusts @ git+https://github.com/django-trusts/django-trusts.git@f5211c11047eb6810680f5d1b13bf34b2c376635
+django-trusts @ git+https://github.com/django-trusts/django-trusts.git@6934894489d4fc0e46de88b55b9a27f5f2eb2b41
+django-trusts-ordered-fold @ git+https://github.com/django-trusts/django-trusts-ordered-fold.git@c8c649aa5278db2b11fc380fa1646ae73df471ac
 dj-database-url>=2.3.0
 psycopg[binary]>=3.2

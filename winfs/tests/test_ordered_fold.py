@@ -106,7 +106,27 @@ class OrderedFoldParityTests(FixtureMixin, PostgresTestCase):
         self.assertIsNone(mask_for_permission(spoof))
         self.assertIsNone(access_check_perm(self.alice, self.notes, spoof))
         self.assertIsNotNone(mask_for_permission(self._read_perm()))
-        self.assertTrue(access_check_perm(self.alice, self.notes, self._read_perm()))
+        self.assertTrue(
+            access_check_perm(self.alice, self.notes, self._read_perm())
+        )
+        # The fold grant is the same denial. The mask join requires the
+        # permission row's content type to be winfs/WinNode, so a
+        # same-codename row on another model does not match.
+        with CaptureQueriesContext(connection) as captured:
+            self.assertFalse(self._fold(self.alice, self.notes, spoof))
+        self.assertEqual(len(captured.captured_queries), 1)
+        sql = captured.captured_queries[0]["sql"]
+        self.assertIn("django_content_type", sql)
+        self.assertIn("of_ct.app_label = maskmap.app_label", sql)
+        self.assertIn("of_ct.model = 'winnode'", sql)
+        self.assertNotIn(
+            self.notes,
+            list(WinNode.objects.authorized(self.alice, spoof)),
+        )
+        self.assertTrue(self._fold(self.alice, self.notes, self._read_perm()))
+        codes = self.alice.get_all_permissions(self.notes)
+        self.assertIn("winfs.read_winnode", codes)
+        self.assertNotIn("auth.read_winnode", codes)
 
     def test_has_perm_object_decision_is_one_query(self):
         allow(self.notes, self.data["alice"], R)
